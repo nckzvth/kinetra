@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { emojiOf, isReaction, type Kudos } from '../data/social'
+import { emojiOf, isReaction, removeReaction, sendReaction, type Kudos } from '../data/social'
 import { Icon } from './Icon'
 import { Sheet } from './Sheet'
 
@@ -142,4 +142,37 @@ export function ReactionBar({
       )}
     </span>
   )
+}
+
+/** Reaction chips for a post with optimistic toggling, shared by workout and status cards. */
+export function useReactions(
+  target: { id: string; user_id: string },
+  kudos: Kudos[],
+  me: string,
+  onChanged: () => void,
+  notify: (m: string) => void,
+) {
+  const [optimistic, setOptimistic] = useState<{ emoji: string; on: boolean }[]>([])
+  const groups = (() => {
+    const g = groupReactions(kudos, me)
+    for (const o of optimistic) {
+      const cur = g.find((x) => x.emoji === o.emoji)
+      if (o.on && !cur?.mine) cur ? ((cur.count += 1), (cur.mine = true)) : g.push({ emoji: o.emoji, count: 1, mine: true })
+      if (!o.on && cur?.mine) ((cur.count -= 1), (cur.mine = false))
+    }
+    return g.filter((x) => x.count > 0)
+  })()
+  const toggle = async (emoji: string, on: boolean) => {
+    setOptimistic((o) => [...o.filter((x) => x.emoji !== emoji), { emoji, on }])
+    try {
+      if (on) await sendReaction(target.user_id, target.id, emoji)
+      else await removeReaction(target.id, emoji)
+      onChanged()
+    } catch {
+      notify("Couldn't send that. Check your connection.")
+    } finally {
+      setTimeout(() => setOptimistic((o) => o.filter((x) => x.emoji !== emoji)), 1500)
+    }
+  }
+  return { groups, toggle }
 }

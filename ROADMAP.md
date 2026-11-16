@@ -12,7 +12,8 @@ Status as of November 2026. Live app: https://nckzvth.github.io/kinetra/
 
 ## Friends (built)
 
-- **Profiles:** @username, name and photo, with privacy switches for sharing workouts and showing weights (You → Friends).
+- **Profiles:** @username, name, photo and a short bio, with privacy switches for sharing workouts and showing weights (You → Friends). Tap anyone in Feed, Friends or the leaderboard to open their profile page: bio, this week / last 30 days / week streak, and their posts and workouts. Strangers see only name and username.
+- **Posts:** "What's up?" status posts with text (up to 500 characters), a photo or a GIF. Friends-only, they stay up until deleted, and get the same reactions, notes and push notifications as workouts. Photos are resized to 1600 px and stripped of location data, then stored in a private bucket that only friends can read.
 - **Adding friends:** search by name or @username, or share an invite link (`?invite=username`). Requests are accepted or declined; nothing is shared until both agree.
 - **Training now:** a live strip at the top of Feed; cheer friends on with any emoji.
 - **Feed:** friends' finished workouts and activities alongside yours, with highlights and (if shared) weights.
@@ -25,6 +26,7 @@ Status as of November 2026. Live app: https://nckzvth.github.io/kinetra/
 ### Still to do for Friends
 
 - ~~**GIFs in notes**~~ — built: GIPHY search (key kept server-side), picker with attribution, GIFs in notes and "For you".
+- **Reels (later):** short, temporary vertical clips (about 15–30 seconds) that disappear after 24 hours, shown as a row of rings at the top of Feed, tap through full screen, with emoji replies. Needs video upload limits, compression and a cleanup job for expired clips; storage cost is the main thing to plan for on the free tier.
 
 ## Then: Teams and seasons
 

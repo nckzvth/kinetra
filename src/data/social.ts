@@ -12,6 +12,8 @@ export interface PublicProfile {
   username: string
   display_name: string
   avatar_url: string | null
+  /** Short "about me", up to 160 characters. */
+  bio?: string
   share_activity: boolean
   share_weights: boolean
 }
@@ -37,12 +39,23 @@ export interface SharedSummary {
   /** Present only when the owner shares weights. */
   lifts?: { name: string; weight: number; unit: string; reps: number[] }[]
   ups?: number
+  /** Status posts (kind 'post'). */
+  body?: string
+  gif?: NoteGif | null
+  photo?: PostPhoto | null
+}
+
+export interface PostPhoto {
+  /** Storage path in the private post-photos bucket: <user_id>/<post id>.jpg */
+  path: string
+  w: number
+  h: number
 }
 
 export interface SharedActivity {
   id: string
   user_id: string
-  kind: 'lift' | 'activity'
+  kind: 'lift' | 'activity' | 'post'
   title: string
   started_at: string
   duration_seconds: number | null
@@ -418,7 +431,7 @@ export function weeklyLeaderboard(feed: SocialFeed): LeaderRow[] {
   for (const a of feed.activities) {
     if (new Date(a.started_at) < monday) continue
     const r = rows.get(a.user_id)
-    if (!r) continue
+    if (!r || a.kind === 'post') continue
     r.sessions += 1
     r.minutes += Math.round((a.duration_seconds ?? 0) / 60)
     r.ups += a.summary.ups ?? 0
@@ -453,9 +466,153 @@ export async function listBlocked(): Promise<PublicProfile[]> {
   return Object.values(await profilesById(x.c, ids))
 }
 
-export async function reportUser(userId: string, reason: string, kudosId?: string) {
+export async function reportUser(userId: string, reason: string, kudosId?: string, activityId?: string) {
   const x = await ctx()
   if (!x) throw new Error('Sign in first')
-  const { error } = await x.c.from('reports').insert({ reporter: x.me, reported_user: userId, reason, kudos_id: kudosId ?? null })
+  const { error } = await x.c
+    .from('reports')
+    .insert({ reporter: x.me, reported_user: userId, reason, kudos_id: kudosId ?? null, activity_id: activityId ?? null })
   fail(error)
+}
+
+// ─── Posts ──────────────────────────────────────────────────────────────────
+
+export const POST_MAX = 500
+
+/** Shrinks a photo to at most 1600px on the long side and re-encodes it as JPEG (also strips EXIF/location). */
+export async function compressPhoto(file: File): Promise<{ blob: Blob; w: number; h: number }> {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' } as ImageBitmapOptions).catch(() => null)
+  const src: { width: number; height: number; draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void } = bmp
+    ? { width: bmp.width, height: bmp.height, draw: (c, w, h) => c.drawImage(bmp, 0, 0, w, h) }
+    : await new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight, draw: (c, w, h) => c.drawImage(img, 0, 0, w, h) })
+        img.onerror = () => reject(new Error("That photo couldn't be opened"))
+        img.src = URL.createObjectURL(file)
+      })
+  const scale = Math.min(1, 1600 / Math.max(src.width, src.height))
+  const w = Math.round(src.width * scale)
+  const h = Math.round(src.height * scale)
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  src.draw(canvas.getContext('2d')!, w, h)
+  bmp?.close()
+  const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.82))
+  if (!blob) throw new Error("That photo couldn't be processed")
+  return { blob, w, h }
+}
+
+/** Posts a status to friends: text, a GIF and/or a photo. */
+export async function createPost(input: { body: string; gif: NoteGif | null; photo: File | null }): Promise<void> {
+  const x = await ctx()
+  if (!x) throw new Error('Sign in first')
+  const body = input.body.trim().slice(0, POST_MAX)
+  if (!body && !input.gif && !input.photo) throw new Error('Write something or add a photo')
+  const id = crypto.randomUUID()
+  let photo: PostPhoto | null = null
+  if (input.photo) {
+    const { blob, w, h } = await compressPhoto(input.photo)
+    const path = `${x.me}/${id}.jpg`
+    const { error } = await x.c.storage.from('post-photos').upload(path, blob, { contentType: 'image/jpeg', upsert: false })
+    if (error) throw new Error("Couldn't upload the photo. Check your connection.")
+    photo = { path, w, h }
+  }
+  const gif = input.gif ? { url: input.gif.url, still: input.gif.still ?? null, w: input.gif.w, h: input.gif.h, title: input.gif.title ?? '' } : null
+  const { error } = await x.c.from('shared_activities').insert({
+    id,
+    user_id: x.me,
+    kind: 'post',
+    title: 'post',
+    started_at: new Date().toISOString(),
+    duration_seconds: null,
+    summary: { body, gif, photo } satisfies SharedSummary,
+  })
+  if (error && photo) await x.c.storage.from('post-photos').remove([photo.path])
+  fail(error)
+}
+
+export async function deletePost(a: SharedActivity) {
+  const x = await ctx()
+  if (!x) throw new Error('Sign in first')
+  const { error } = await x.c.from('shared_activities').delete().eq('id', a.id).eq('user_id', x.me)
+  fail(error)
+  if (a.summary.photo?.path) await x.c.storage.from('post-photos').remove([a.summary.photo.path])
+  photoUrls.delete(a.summary.photo?.path ?? '')
+}
+
+const photoUrls = new Map<string, { url: string; until: number }>()
+
+/** Short-lived signed link to a post photo (the bucket is private; only you and friends can read). */
+export async function photoUrl(path: string): Promise<string | null> {
+  const hit = photoUrls.get(path)
+  if (hit && hit.until > Date.now()) return hit.url
+  const c = await getClient()
+  if (!c) return null
+  const { data } = await c.storage.from('post-photos').createSignedUrl(path, 3600)
+  if (!data?.signedUrl) return null
+  photoUrls.set(path, { url: data.signedUrl, until: Date.now() + 50 * 60000 })
+  return data.signedUrl
+}
+
+// ─── Profile pages ──────────────────────────────────────────────────────────
+
+export interface ProfilePage {
+  me: string
+  profile: PublicProfile
+  isMe: boolean
+  isFriend: boolean
+  activities: SharedActivity[]
+  kudos: Kudos[]
+  stats: { thisWeek: number; last30: number; streakWeeks: number; posts: number }
+}
+
+/** Monday 00:00 of the week containing d. */
+function weekStart(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)).getTime()
+}
+
+/** Weekly training stats from shared workouts/activities (posts don't count). */
+export function profileStats(activities: SharedActivity[], now = new Date()): ProfilePage['stats'] {
+  const train = activities.filter((a) => a.kind !== 'post')
+  const thisMon = weekStart(now)
+  const weeks = new Set(train.map((a) => weekStart(new Date(a.started_at))))
+  // Streak: consecutive weeks with training, counting this week only if it already has some.
+  let streak = 0
+  let w = weeks.has(thisMon) ? thisMon : weekStart(new Date(thisMon - 86400000))
+  while (weeks.has(w)) {
+    streak++
+    w = weekStart(new Date(w - 86400000))
+  }
+  return {
+    thisWeek: train.filter((a) => Date.parse(a.started_at) >= thisMon).length,
+    last30: train.filter((a) => Date.parse(a.started_at) >= now.getTime() - 30 * 86400000).length,
+    streakWeeks: streak,
+    posts: activities.length - train.length,
+  }
+}
+
+export async function loadProfilePage(userId: string): Promise<ProfilePage | null> {
+  const x = await ctx()
+  if (!x) return null
+  const [prof, acts, fr] = await Promise.all([
+    x.c.from('public_profiles').select('*').eq('user_id', userId).maybeSingle(),
+    x.c.from('shared_activities').select('*').eq('user_id', userId).order('started_at', { ascending: false }).limit(60),
+    userId === x.me
+      ? Promise.resolve({ data: [] })
+      : x.c.from('friendships').select('id').eq('status', 'accepted').or(`and(requester.eq.${x.me},addressee.eq.${userId}),and(requester.eq.${userId},addressee.eq.${x.me})`),
+  ])
+  if (!prof.data) return null
+  const activities = (acts.data ?? []) as SharedActivity[]
+  const ids = activities.map((a) => a.id)
+  const kudos = ids.length ? (((await x.c.from('kudos').select('*').in('activity_id', ids)).data ?? []) as Kudos[]) : []
+  return {
+    me: x.me,
+    profile: prof.data as PublicProfile,
+    isMe: userId === x.me,
+    isFriend: userId !== x.me && ((fr.data ?? []) as unknown[]).length > 0,
+    activities,
+    kudos,
+    stats: profileStats(activities),
+  }
 }

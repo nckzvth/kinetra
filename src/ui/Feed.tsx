@@ -6,7 +6,6 @@ import {
   markInboxSeen,
   emojiOf,
   isReaction,
-  removeReaction,
   sendNote,
   sendReaction,
   subscribeSocial,
@@ -28,6 +27,9 @@ import { formatClock, useNow } from './timer'
 import { EmojiPicker, groupReactions, ReactionBar } from './Reactions'
 import { NotificationsPrompt } from './Notifications'
 import { GifPicker, GifView } from './Gifs'
+import { PostComposer, PostItem } from './Posts'
+import { ProfileSheet } from './Profile'
+import { useReactions } from './Reactions'
 
 /** Friends' data for the Feed, kept fresh by Supabase live updates. */
 function useSocial(session: Session | null) {
@@ -91,6 +93,8 @@ export function FeedView({
   const { feed, reload } = useSocial(session)
   const [noteFor, setNoteFor] = useState<SharedActivity | null>(null)
   const [board, setBoard] = useState(false)
+  const [composing, setComposing] = useState(false)
+  const [profileOf, setProfileOf] = useState<string | null>(null)
 
   const me = feed?.me
   const myProfile = me ? feed?.profiles[me] : undefined
@@ -99,7 +103,8 @@ export function FeedView({
   // Your sessions come from this device; friends' from Supabase. Skip your own shared copies.
   const items: Item[] = useMemo(() => {
     const own: Item[] = sessions.slice(0, 30).map((s) => ({ at: s.started_at, own: s }))
-    const friends: Item[] = (feed?.activities ?? []).filter((a) => a.user_id !== me).map((a) => ({ at: a.started_at, friend: a }))
+    // Your workouts come from this device; your posts and everyone else's activity from Supabase.
+    const friends: Item[] = (feed?.activities ?? []).filter((a) => a.user_id !== me || a.kind === 'post').map((a) => ({ at: a.started_at, friend: a }))
     return [...own, ...friends].sort((a, b) => b.at.localeCompare(a.at))
   }, [sessions, feed, me])
   const groups = groupByDay(items)
@@ -154,6 +159,13 @@ export function FeedView({
       ) : null}
 
       <div className="section-title"><h2>Activity</h2></div>
+      {myProfile && (
+        <button className="card composer-cta" onClick={() => setComposing(true)}>
+          <Avatar p={myProfile} size={34} />
+          <span className="grow muted">What’s up, {firstName || 'there'}?</span>
+          <Icon name="image" size={20} className="muted" />
+        </button>
+      )}
       {groups.length === 0 ? (
         <div className="card empty">
           <p style={{ fontWeight: 600, color: 'var(--text)' }}>Nothing here yet</p>
@@ -167,9 +179,22 @@ export function FeedView({
               {list.map((it) =>
                 'own' in it ? (
                   <OwnItem key={it.own.id} s={it.own} unit={unit} name={firstName || 'You'} avatar={myProfile ?? null} kudos={kudosFor(it.own.id)} onOpen={() => onOpenSession(it.own.id)} />
+                ) : it.friend.kind === 'post' ? (
+                  <PostItem
+                    key={it.friend.id}
+                    a={it.friend}
+                    who={feed!.profiles[it.friend.user_id]}
+                    me={feed!.me}
+                    kudos={kudosFor(it.friend.id)}
+                    onOpenProfile={() => setProfileOf(it.friend.user_id)}
+                    onNote={() => setNoteFor(it.friend)}
+                    onChanged={reload}
+                    notify={notify}
+                  />
                 ) : (
                   <FriendItem
                     key={it.friend.id}
+                    onOpenProfile={() => setProfileOf(it.friend.user_id)}
                     a={it.friend}
                     who={feed!.profiles[it.friend.user_id]}
                     me={feed!.me}
@@ -188,7 +213,7 @@ export function FeedView({
       {noteFor && feed && (
         <NoteSheet
           to={feed.profiles[noteFor.user_id]}
-          about={noteFor.title}
+          about={noteFor.kind === 'post' ? 'their post' : noteFor.title}
           onClose={() => setNoteFor(null)}
           onSend={async (msg, gif) => {
             await sendNote(noteFor.user_id, noteFor.id, msg, gif)
@@ -198,7 +223,9 @@ export function FeedView({
           }}
         />
       )}
-      {board && feed && <LeaderboardSheet feed={feed} onClose={() => setBoard(false)} />}
+      {board && feed && <LeaderboardSheet feed={feed} onClose={() => setBoard(false)} onOpenProfile={setProfileOf} />}
+      {composing && <PostComposer me={myProfile ?? null} onClose={() => setComposing(false)} onPosted={reload} notify={notify} />}
+      {profileOf && <ProfileSheet userId={profileOf} session={session} onClose={() => { setProfileOf(null); reload() }} notify={notify} />}
     </>
   )
 }
@@ -286,7 +313,10 @@ function ResumeCard({ active, onResume }: { active: ActiveWorkout; onResume: () 
 // ─── For you, leaderboard, CTA ─────────────────────────────────────────────
 
 export function ForYou({ feed, notify = () => {} }: { feed: SocialFeed; notify?: (m: string) => void }) {
-  const titleOf = (k: Kudos) => feed.activities.find((a) => a.id === k.activity_id)?.title
+  const titleOf = (k: Kudos) => {
+    const a = feed.activities.find((x) => x.id === k.activity_id)
+    return a?.kind === 'post' ? 'your post' : a?.title
+  }
   const [reporting, setReporting] = useState<Kudos | null>(null)
   return (
     <>
@@ -355,7 +385,7 @@ export function LeaderboardCard({ feed, onOpen }: { feed: SocialFeed; onOpen: ()
   )
 }
 
-function LeaderboardSheet({ feed, onClose }: { feed: SocialFeed; onClose: () => void }) {
+function LeaderboardSheet({ feed, onClose, onOpenProfile }: { feed: SocialFeed; onClose: () => void; onOpenProfile: (id: string) => void }) {
   const rows = weeklyLeaderboard(feed)
   return (
     <Sheet title="This week" onClose={onClose} right={<button className="btn ghost" onClick={onClose}>Done</button>}>
@@ -363,7 +393,7 @@ function LeaderboardSheet({ feed, onClose }: { feed: SocialFeed; onClose: () => 
         {rows.map((r, i) => {
           const p = feed.profiles[r.user_id]
           return (
-            <div key={r.user_id} className="cell" style={r.user_id === feed.me ? { background: 'var(--info-soft)' } : undefined}>
+            <button key={r.user_id} className="cell" style={r.user_id === feed.me ? { background: 'var(--info-soft)' } : undefined} onClick={() => onOpenProfile(r.user_id)}>
               <span className="num" style={{ width: 22, fontWeight: 700, color: i < 3 ? 'var(--accent-text)' : 'var(--text-2)' }}>{i + 1}</span>
               <Avatar p={p ?? null} size={34} />
               <span className="grow">
@@ -371,7 +401,7 @@ function LeaderboardSheet({ feed, onClose }: { feed: SocialFeed; onClose: () => 
                 <span className="tiny muted">{r.sessions} sessions · {r.minutes} min{r.ups ? ` · ${r.ups} weight increases` : ''}</span>
               </span>
               <span className="num" style={{ fontWeight: 700 }}>{Math.round(r.score)}</span>
-            </div>
+            </button>
           )
         })}
       </div>
@@ -429,52 +459,40 @@ export function FriendItem({
   me,
   kudos,
   onNote,
+  onOpenProfile,
   onChanged,
   notify,
+  readOnly = false,
+  showDate = false,
 }: {
   a: SharedActivity
   who: PublicProfile | undefined
   me: string
   kudos: Kudos[]
   onNote: () => void
+  onOpenProfile?: () => void
   onChanged: () => void
   notify: (m: string) => void
+  /** Your own activity on your profile: show reactions, don't offer to react. */
+  readOnly?: boolean
+  /** Include the date (profile lists aren't grouped by day). */
+  showDate?: boolean
 }) {
-  const [optimistic, setOptimistic] = useState<{ emoji: string; on: boolean }[]>([])
+  const { groups, toggle } = useReactions(a, kudos, me, onChanged, notify)
   const [picking, setPicking] = useState(false)
   const myNotes = kudos.filter((k) => k.kind === 'note' && k.from_user === me).length
   const name = who?.display_name.split(/\s+/)[0] || who?.username || 'A friend'
 
-  // Server state plus any taps still in flight, so chips respond instantly.
-  const groups = (() => {
-    const g = groupReactions(kudos, me)
-    for (const o of optimistic) {
-      const cur = g.find((x) => x.emoji === o.emoji)
-      if (o.on && !cur?.mine) cur ? ((cur.count += 1), (cur.mine = true)) : g.push({ emoji: o.emoji, count: 1, mine: true })
-      if (!o.on && cur?.mine) ((cur.count -= 1), (cur.mine = false))
-    }
-    return g.filter((x) => x.count > 0)
-  })()
-
-  const toggle = async (emoji: string, on: boolean) => {
-    setOptimistic((o) => [...o.filter((x) => x.emoji !== emoji), { emoji, on }])
-    try {
-      if (on) await sendReaction(a.user_id, a.id, emoji)
-      else await removeReaction(a.id, emoji)
-      onChanged()
-    } catch {
-      notify("Couldn't send that. Check your connection.")
-    } finally {
-      setTimeout(() => setOptimistic((o) => o.filter((x) => x.emoji !== emoji)), 1500)
-    }
-  }
-
   return (
     <div className="feed-item">
-      <Avatar p={who ?? null} size={36} />
+      <button className="avatar-btn" onClick={onOpenProfile} disabled={!onOpenProfile} aria-label={`Open ${name}'s profile`}>
+        <Avatar p={who ?? null} size={36} />
+      </button>
       <span className="grow" style={{ minWidth: 0 }}>
-        <span className="feed-line"><b>{name}</b> {a.kind === 'activity' ? 'logged' : 'finished'} <b>{a.title}</b></span>
-        <Meta at={a.started_at} duration={a.duration_seconds} />
+        <span className="feed-line">
+          {onOpenProfile ? <button className="name-btn" onClick={onOpenProfile}>{name}</button> : <b>{readOnly ? 'You' : name}</b>} {a.kind === 'activity' ? 'logged' : 'finished'} <b>{a.title}</b>
+        </span>
+        <Meta at={a.started_at} duration={a.duration_seconds} date={showDate} />
         <Highlights items={a.summary.highlights ?? []} />
         {a.summary.lifts && a.summary.lifts.length > 0 && (
           <span className="lift-lines">
@@ -483,12 +501,16 @@ export function FriendItem({
             ))}
           </span>
         )}
-        <span className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <ReactionBar groups={groups} onToggle={(e, on) => void toggle(e, on)} onAdd={() => setPicking(true)} />
-          <button className="reaction-chip" style={{ marginTop: 10 }} onClick={onNote}>
-            <Icon name="pencil" size={14} /> {myNotes ? 'Noted' : 'Note'}
-          </button>
-        </span>
+        {readOnly ? (
+          <ReactionBar groups={groups} readOnly />
+        ) : (
+          <span className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <ReactionBar groups={groups} onToggle={(e, on) => void toggle(e, on)} onAdd={() => setPicking(true)} />
+            <button className="reaction-chip" style={{ marginTop: 10 }} onClick={onNote}>
+              <Icon name="pencil" size={14} /> {myNotes ? 'Noted' : 'Note'}
+            </button>
+          </span>
+        )}
       </span>
       {picking && (
         <EmojiPicker
@@ -504,9 +526,10 @@ export function FriendItem({
   )
 }
 
-function Meta({ at, duration, rpe }: { at: string; duration: number | null; rpe?: number | null }) {
+function Meta({ at, duration, rpe, date }: { at: string; duration: number | null; rpe?: number | null; date?: boolean }) {
   return (
     <span className="tiny muted" style={{ display: 'block', marginTop: 2 }}>
+      {date ? `${new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} · ` : ''}
       {new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
       {duration ? ` · ${fmtDuration(duration)}` : ''}
       {rpe ? ` · effort ${rpe}` : ''}
@@ -527,14 +550,15 @@ function Highlights({ items }: { items: string[] }) {
 
 const QUICK_NOTES = ['Strong work 💪', "Let's go!", 'Proud of you', 'Beast mode']
 
-function NoteSheet({
+export function NoteSheet({
   to,
   about,
   onClose,
   onSend,
 }: {
   to: PublicProfile | undefined
-  about: string
+  /** What the note is about, or null for a direct note. */
+  about: string | null
   onClose: () => void
   onSend: (m: string, gif: NoteGif | null) => Promise<void>
 }) {
@@ -559,7 +583,7 @@ function NoteSheet({
         left={<button className="btn ghost" onClick={onClose}>Cancel</button>}
         right={<button className="btn ghost" style={{ fontWeight: 600 }} disabled={busy || (!msg.trim() && !gif)} onClick={() => void send(msg)}>Send</button>}
       >
-        <p className="small muted" style={{ margin: '0 4px 12px' }}>On {about}. Only they will see it.</p>
+        <p className="small muted" style={{ margin: '0 4px 12px' }}>{about ? `On ${about}. ` : ''}Only they will see it.</p>
         <textarea className="input" rows={3} maxLength={280} value={msg} onChange={(e) => setMsg(e.target.value)} placeholder={gif ? 'Add a message (optional)' : 'Write something encouraging'} autoFocus />
         {gif && <GifView gif={gif} onRemove={() => setGif(null)} />}
         <div className="row" style={{ flexWrap: 'wrap', gap: 8, marginTop: 12 }}>

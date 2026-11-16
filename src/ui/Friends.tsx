@@ -27,6 +27,7 @@ import { SignInForm } from './Account'
 import { Icon } from './Icon'
 import { Sheet } from './Sheet'
 import { NotificationsRow } from './Notifications'
+import { ProfileSheet } from './Profile'
 
 export function Avatar({ p, size = 40 }: { p: Pick<PublicProfile, 'display_name' | 'username' | 'avatar_url'> | null; size?: number }) {
   const initial = (p?.display_name || p?.username || '?').slice(0, 1).toUpperCase()
@@ -47,6 +48,7 @@ export function FriendsPage({ session, notify }: { session: Session | null; noti
   const [profile, setProfile] = useState<PublicProfile | null | undefined>(undefined)
   const [entries, setEntries] = useState<FriendEntry[]>([])
   const [editing, setEditing] = useState(false)
+  const [profileOf, setProfileOf] = useState<string | null>(null)
   const [removing, setRemoving] = useState<FriendEntry | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [blocked, setBlocked] = useState<PublicProfile[]>([])
@@ -118,11 +120,13 @@ export function FriendsPage({ session, notify }: { session: Session | null; noti
 
       <div className="card" style={{ marginTop: 18 }}>
         <div className="cell" style={{ gap: 14 }}>
-          <Avatar p={profile} size={52} />
-          <div className="grow">
-            <div style={{ fontWeight: 700, fontSize: 18 }}>{profile.display_name || profile.username}</div>
-            <div className="small muted">@{profile.username}</div>
-          </div>
+          <button className="row grow" style={{ gap: 14, textAlign: 'left', minWidth: 0 }} onClick={() => setProfileOf(profile.user_id)} aria-label="View your profile">
+            <Avatar p={profile} size={52} />
+            <span className="grow" style={{ minWidth: 0 }}>
+              <span style={{ display: 'block', fontWeight: 700, fontSize: 18 }}>{profile.display_name || profile.username}</span>
+              <span className="small muted">@{profile.username} · View profile</span>
+            </span>
+          </button>
           <button className="btn sm" onClick={() => setEditing(true)}>Edit</button>
         </div>
         <InviteRow username={profile.username} notify={notify} />
@@ -156,11 +160,13 @@ export function FriendsPage({ session, notify }: { session: Session | null; noti
         <div className="card list">
           {friends.map((e) => (
             <div key={e.friendship.id} className="cell">
-              <Avatar p={e.profile} />
-              <span className="grow">
-                <span style={{ display: 'block', fontWeight: 600 }}>{e.profile.display_name || e.profile.username}</span>
-                <span className="tiny muted">@{e.profile.username}</span>
-              </span>
+              <button className="row grow" style={{ gap: 12, textAlign: 'left', minWidth: 0 }} onClick={() => setProfileOf(e.profile.user_id)}>
+                <Avatar p={e.profile} />
+                <span className="grow" style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontWeight: 600 }}>{e.profile.display_name || e.profile.username}</span>
+                  <span className="tiny muted">{e.profile.bio ? e.profile.bio : `@${e.profile.username}`}</span>
+                </span>
+              </button>
               <button className="icon-btn" aria-label={`Options for ${e.profile.username}`} onClick={() => setRemoving(e)}><Icon name="more" size={20} /></button>
             </div>
           ))}
@@ -201,6 +207,7 @@ export function FriendsPage({ session, notify }: { session: Session | null; noti
         </>
       )}
 
+      {profileOf && <ProfileSheet userId={profileOf} session={session} onClose={() => { setProfileOf(null); void reload() }} notify={notify} />}
       {removing && (
         <Sheet title={removing.profile.display_name || `@${removing.profile.username}`} onClose={() => setRemoving(null)} right={<button className="btn ghost" onClick={() => setRemoving(null)}>Done</button>}>
           <div className="card list">
@@ -335,6 +342,7 @@ export function ProfileSetup({ session, existing, onSaved, onCancel }: { session
   const meta = sessionMeta(session)
   const [name, setName] = useState(existing?.display_name ?? meta.name)
   const [username, setUsername] = useState(existing?.username ?? suggestUsername(meta.name, session.user.email))
+  const [bio, setBio] = useState(existing?.bio ?? '')
   const [state, setState] = useState<'idle' | 'checking' | 'free' | 'taken' | 'invalid'>('idle')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -378,6 +386,18 @@ export function ProfileSetup({ session, existing, onSaved, onCancel }: { session
         </div>
       </div>
       <p className="group-footer">Lowercase letters, numbers and underscores.</p>
+      <div className="card" style={{ marginTop: 16, padding: '10px 14px' }}>
+        <textarea
+          className="composer-input"
+          rows={2}
+          maxLength={160}
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          placeholder="Bio: what you’re training for, favourite lift…"
+          aria-label="Bio"
+        />
+        <span className="tiny muted" style={{ display: 'block', textAlign: 'right' }}>{160 - bio.length}</span>
+      </div>
       {error && <p className="small" style={{ color: 'var(--danger)', margin: '10px 4px 0' }}>{error}</p>}
       <button
         className="btn tint lg block"
@@ -390,6 +410,7 @@ export function ProfileSetup({ session, existing, onSaved, onCancel }: { session
             await saveMyProfile({
               username,
               display_name: name.trim(),
+              bio: bio.trim(),
               avatar_url: existing?.avatar_url ?? meta.avatar,
               share_activity: existing?.share_activity ?? true,
               share_weights: existing?.share_weights ?? false,
@@ -497,7 +518,19 @@ export function InviteHandler({ session, notify }: { session: Session | null; no
 const REASONS = ['Harassment or bullying', 'Spam', 'Inappropriate content', 'Pretending to be someone else', 'Something else']
 
 /** Report a person (optionally a specific note). Offers to block them too. */
-export function ReportSheet({ who, kudosId, onClose, notify }: { who: PublicProfile; kudosId?: string; onClose: () => void; notify: (m: string) => void }) {
+export function ReportSheet({
+  who,
+  kudosId,
+  activityId,
+  onClose,
+  notify,
+}: {
+  who: PublicProfile
+  kudosId?: string
+  activityId?: string
+  onClose: () => void
+  notify: (m: string) => void
+}) {
   const [reason, setReason] = useState<string | null>(null)
   const [detail, setDetail] = useState('')
   const [alsoBlock, setAlsoBlock] = useState(true)
@@ -515,7 +548,7 @@ export function ReportSheet({ who, kudosId, onClose, notify }: { who: PublicProf
           onClick={async () => {
             setBusy(true)
             try {
-              await reportUser(who.user_id, detail.trim() ? `${reason}: ${detail.trim()}` : reason!, kudosId)
+              await reportUser(who.user_id, detail.trim() ? `${reason}: ${detail.trim()}` : reason!, kudosId, activityId)
               if (alsoBlock) await blockUser(who.user_id)
               notify(alsoBlock ? 'Reported and blocked. Thank you.' : 'Reported. Thank you.')
               onClose()
