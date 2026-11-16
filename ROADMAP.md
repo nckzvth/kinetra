@@ -10,24 +10,25 @@ Status as of November 2026. Live app: https://nckzvth.github.io/kinetra/
 - **Accounts and sync:** Supabase with email/password and Google sign-in, offline-first on each device.
 - **Hosting:** GitHub Pages, deployed on every push to `main`.
 
-## Next: Friends
+## Friends (built)
 
-The social layer that makes people come back daily. The **Feed** tab already exists (your own activity, resume and up-next cards); friends' activity slots into it.
+- **Profiles:** @username, name and photo, with privacy switches for sharing workouts and showing weights (You → Friends).
+- **Adding friends:** search by name or @username, or share an invite link (`?invite=username`). Requests are accepted or declined; nothing is shared until both agree.
+- **Training now:** a live strip at the top of Feed, with a one-tap fist-bump.
+- **Feed:** friends' finished workouts and activities alongside yours, with highlights and (if shared) weights.
+- **Encouragement:** fist-bumps and short private notes, with a "For you" section for what you've received.
+- **This week:** a leaderboard among friends (10 points per session, 1 per 6 active minutes up to 100, 5 per weight increase; resets Monday).
+- **Privacy:** enforced by row-level security; verified that strangers see nothing and that nothing is visible before a request is accepted.
 
-- **Adding friends:** share an invite link or search by username, then accept the request. Nothing is shared until both sides agree.
-- **Working out now:** a live "Nick is training · Push A · 18 min" line at the top of Feed, using Supabase's live updates.
-- **Feed:** each friend's finished workouts (e.g. "Nick finished Pull A · Deadlift 125 lb · new best"), plus runs, rounds and climbs.
-- **Encouragement:**
-  - one-tap fist-bump on a workout or while someone is training;
-  - short notes;
-  - GIFs, which need a free GIF service key (Giphy, for example).
-- **High scores:** weekly leaderboards for sessions, total volume, streaks and personal records.
-- **Notifications:** push alerts when someone taps you. On iPhone these only work once the app is added to the home screen, and they need a small server-side piece in Supabase.
-- **Privacy:** you choose what friends can see (workouts only, or weights too) in You → Friends. Friends only ever see a summary of each workout, never your full data.
+### Still to do for Friends
+
+- **GIFs:** needs a free Giphy (or similar) API key.
+- **Push notifications** for taps and notes: needs VAPID keys and a Supabase edge function; on iPhone only for home-screen apps.
+- **Blocking and reporting** before opening to people beyond friend groups.
 
 ## Then: Teams and seasons
 
-Friends grouped into teams that compete. Built on top of Friends.
+Friends grouped into teams that compete. Builds on the Friends release.
 
 - **Teams:** start one, invite friends, pick a name, colour and emblem.
 - **Seasons:** team against team over a week or month, scored on workouts completed, consistency and personal records, not just raw weight, so beginners can help their team too.

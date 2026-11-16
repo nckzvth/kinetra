@@ -5,7 +5,7 @@ works offline, with optional Supabase sync. Programs are data: pick a template, 
 
 ## Status
 
-Lifting, editable programs, activity logging, accounts and sync are built. Next up is Friends, then Teams and seasons, then Nutrition. The full plan is in [ROADMAP.md](ROADMAP.md).
+Lifting, editable programs, activity logging, accounts and sync, and Friends are built. Next up is Teams and seasons, then Nutrition. The full plan is in [ROADMAP.md](ROADMAP.md).
 
 Deploys: every push to `main` runs tests and publishes to GitHub Pages (`.github/workflows/deploy.yml`).
 Supabase project ref: `blcznhzmiamnpmxrboue` (us-east-1).

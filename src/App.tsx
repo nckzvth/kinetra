@@ -4,6 +4,9 @@ import { ensureSeeded } from './data/repo'
 import { consumeAuthError, describeAuthError, enabledProviders, getClient, isSyncConfigured, signInWithProvider, syncNow } from './data/sync'
 import { Sheet } from './ui/Sheet'
 import { HandoffApprover } from './ui/BrowserSignIn'
+import { InviteHandler } from './ui/Friends'
+import { clearLive, setLive, shareSession } from './data/social'
+import { db } from './data/db'
 import { registerCustomExercises } from './domain/catalog'
 import { rulesFor } from './domain/units'
 import { ActivityView } from './ui/Activity'
@@ -141,6 +144,22 @@ export default function App() {
     if (custom) registerCustomExercises(custom.map((c) => c.definition))
   }, [custom])
   const clearOpenDay = useCallback(() => setOpenDay(null), [])
+  const [openYouPage, setOpenYouPage] = useState<'friends' | null>(null)
+  const clearOpenYouPage = useCallback(() => setOpenYouPage(null), [])
+
+  // Tell friends you're training while a workout is open; clear it when it ends.
+  const liveFor = useRef<string | null>(null)
+  const activeId = active ? active.session_id : active === null ? null : undefined
+  useEffect(() => {
+    if (!session || activeId === undefined) return
+    if (activeId && liveFor.current !== activeId) {
+      liveFor.current = activeId
+      if (active) void setLive(active.plan.title, active.started_at).catch(() => {})
+    } else if (!activeId) {
+      liveFor.current = null
+      void clearLive().catch(() => {})
+    }
+  }, [session, activeId, active])
   // Land on Feed, but reopen straight into Work if a workout was left in progress.
   const landed = useRef(false)
   useEffect(() => {
@@ -162,6 +181,7 @@ export default function App() {
         <Onboarding notify={show} session={session} restoring={restoring} />
         {authSheet}
         <HandoffApprover session={session} notify={show} />
+        <InviteHandler session={session} notify={show} />
         {toast}
       </>
     )
@@ -194,6 +214,12 @@ export default function App() {
               }}
               onLog={() => go('log')}
               installBanner={<InstallBanner />}
+              session={session}
+              notify={show}
+              onOpenFriends={() => {
+                setOpenYouPage('friends')
+                go('you')
+              }}
             />
           </>
         )
@@ -219,7 +245,10 @@ export default function App() {
               program={program}
               onFinished={(id) => {
                 setSummaryId(id)
-                if (session) void sync(true)
+                if (session) {
+                  void sync(true)
+                  void db.sessions.get(id).then((s) => s && shareSession(s, unit)).catch(() => {})
+                }
               }}
             />
           )
@@ -245,7 +274,10 @@ export default function App() {
               setView('progress')
               setProgressTab('history')
               setHistoryId(id)
-              if (session) void sync(true)
+              if (session) {
+                void sync(true)
+                void db.sessions.get(id).then((s) => s && shareSession(s, unit)).catch(() => {})
+              }
             }}
           />
         )
@@ -280,6 +312,8 @@ export default function App() {
             notify={show}
             openDay={openDay}
             onOpenedDay={clearOpenDay}
+            openPage={openYouPage}
+            onOpenedPage={clearOpenYouPage}
           />
         )
     }
@@ -309,6 +343,7 @@ export default function App() {
         </nav>
         {authSheet}
         <HandoffApprover session={session} notify={show} />
+        <InviteHandler session={session} notify={show} />
         {toast}
       </div>
     )
@@ -336,6 +371,7 @@ export default function App() {
       {stage}
       {authSheet}
       <HandoffApprover session={session} notify={show} />
+      <InviteHandler session={session} notify={show} />
       {toast}
     </div>
   )

@@ -543,3 +543,21 @@ button.stream-row:active { background: var(--surface-2); }
 .tab { position: relative; }
 .tab-live { position: absolute; top: 8px; right: calc(50% - 18px); width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bar-bg); }
 @media (hover: hover) { button.feed-item:hover, button.feed-hero:hover { background: var(--surface-2); } }
+
+/* ─── Friends ──────────────────────────────────────────────────────────── */
+.avatar { border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.avatar-fallback { display: inline-grid; place-items: center; background: var(--tint); color: #fff; font-weight: 700; }
+.live-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.live-strip::-webkit-scrollbar { display: none; }
+.live-card { flex: 0 0 auto; width: 132px; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 14px 10px 12px; border-radius: var(--radius); background: var(--surface); }
+.live-ring { padding: 2px; border-radius: 50%; box-shadow: 0 0 0 2px var(--accent); display: inline-flex; }
+.fist-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--surface-2); font-size: 14px; font-weight: 600; margin-top: 10px; }
+.fist-btn.on { background: var(--accent-soft); color: var(--accent-text); }
+.react-row { display: flex; gap: 8px; }
+.lift-lines { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.note-bubble { display: block; margin-top: 6px; padding: 8px 12px; border-radius: 14px; background: var(--surface-2); font-size: 15px; line-height: 1.4; }
+.unseen-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--tint); margin-top: 6px; flex-shrink: 0; }
+.podium { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.podium-spot { display: flex; flex-direction: column; align-items: center; padding: 10px 4px; border-radius: 12px; background: var(--surface-2); position: relative; }
+.podium-spot.me { box-shadow: inset 0 0 0 2px var(--tint); }
+.podium-rank { position: absolute; top: 6px; left: 8px; font-size: 12px; font-weight: 800; color: var(--accent-text); }

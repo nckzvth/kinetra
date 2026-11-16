@@ -13,6 +13,7 @@ import { fmtWeight, useMediaQuery } from './hooks'
 import { Icon, type IconName } from './Icon'
 import { Sheet, Stepper } from './Sheet'
 import { NutritionRoadmap } from './Views'
+import { FriendsPage } from './Friends'
 import { InstallContent } from './InstallBanner'
 import { isStandalone } from './install'
 
@@ -28,6 +29,8 @@ export function YouView({
   notify,
   openDay,
   onOpenedDay,
+  openPage = null,
+  onOpenedPage,
 }: {
   profile: Profile
   states: Record<string, ExerciseState>
@@ -38,11 +41,20 @@ export function YouView({
   notify: (m: string) => void
   openDay: string | null
   onOpenedDay: () => void
+  /** Jump straight to a page (e.g. Friends from the Feed). */
+  openPage?: 'friends' | null
+  onOpenedPage?: () => void
 }) {
   const wide = useMediaQuery('(min-width: 900px)')
   const [page, setPage] = useState<Page>('home')
   const [dayId, setDayId] = useState<string | null>(null)
   const [changing, setChanging] = useState(false)
+  useEffect(() => {
+    if (openPage) {
+      setPage(openPage)
+      onOpenedPage?.()
+    }
+  }, [openPage, onOpenedPage])
   useEffect(() => {
     if (openDay) {
       setDayId(openDay)
@@ -96,7 +108,7 @@ export function YouView({
       case 'nutrition':
         return <>{back()}<NutritionRoadmap profile={profile} /></>
       case 'friends':
-        return <>{back()}<FriendsRoadmap /></>
+        return <>{back()}<FriendsPage session={session} notify={notify} /></>
       case 'install':
         return (
           <>
@@ -131,7 +143,7 @@ export function YouView({
       </div>
       <div className="group-header">More</div>
       <div className="card list">
-        <NavCell icon="user" color="#ff375f" label="Friends and teams" value="Coming next" current={wide && cur('friends')} onClick={() => setPage('friends')} />
+        <NavCell icon="user" color="#ff375f" label="Friends" current={wide && cur('friends')} onClick={() => setPage('friends')} />
         <NavCell icon="leaf" color="#30d158" label="Nutrition" value="Coming soon" current={wide && cur('nutrition')} onClick={() => setPage('nutrition')} />
         <NavCell icon={session ? 'cloud' : 'cloudOff'} color="#5e5ce6" label="Account and sync" value={session ? 'On' : 'Off'} current={wide && cur('account')} onClick={() => setPage('account')} />
         <NavCell icon="database" color="#636366" label="Backup and reset" current={wide && cur('data')} onClick={() => setPage('data')} />
@@ -789,36 +801,6 @@ function DataPage({ notify }: { notify: (m: string) => void }) {
           </div>
         </Sheet>
       )}
-    </>
-  )
-}
-
-
-const FRIEND_FEATURES: [string, string][] = [
-  ['Training together', 'See when friends are working out, live, right on Today.'],
-  ['A feed of real effort', 'Finished workouts, new personal bests, runs, rounds and climbs.'],
-  ['Encouragement', 'One-tap fist-bumps, short notes and GIFs, mid-set or after.'],
-  ['Weekly high scores', 'Sessions, volume, streaks and personal records among friends.'],
-  ['Teams and seasons', 'Form a team, take on other teams over a season. Works for friend groups and workplaces.'],
-  ['You control sharing', 'Friends see summaries only. Choose whether they see your weights.'],
-]
-
-function FriendsRoadmap() {
-  return (
-    <>
-      <span className="chip info">Coming next</span>
-      <h1 className="page-title" style={{ marginTop: 8 }}>Friends and teams</h1>
-      <p className="muted" style={{ margin: '8px 4px 0' }}>Train with the people who keep you showing up.</p>
-      <div className="card list" style={{ marginTop: 18 }}>
-        {FRIEND_FEATURES.map(([t, d]) => (
-          <div key={t} className="cell" style={{ alignItems: 'flex-start' }}>
-            <span className="grow">
-              <span style={{ display: 'block', fontWeight: 600 }}>{t}</span>
-              <span className="small muted">{d}</span>
-            </span>
-          </div>
-        ))}
-      </div>
     </>
   )
 }
