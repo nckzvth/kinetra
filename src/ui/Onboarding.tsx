@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { completeOnboarding, programForChoice, type ProgramChoice } from '../data/repo'
-import { isSyncConfigured } from '../data/sync'
+import { isSyncConfigured, signOut } from '../data/sync'
+import type { Session } from '@supabase/supabase-js'
 import { defaultStart, getExercise } from '../domain/catalog'
 import type { EquipmentPreset, UnitSystem } from '../domain/types'
 import { rulesFor } from '../domain/units'
@@ -26,7 +27,7 @@ const PLACES: { preset: EquipmentPreset; icon: IconName; title: string; sub: str
 const sameChoice = (a: ProgramChoice, b: ProgramChoice) =>
   a.kind === b.kind && (a.kind !== 'template' || (b.kind === 'template' && a.templateId === b.templateId))
 
-export function Onboarding({ notify }: { notify: (m: string) => void }) {
+export function Onboarding({ notify, session, restoring }: { notify: (m: string) => void; session: Session | null; restoring: boolean }) {
   const [step, setStep] = useState(0)
   const [choice, setChoice] = useState<ProgramChoice>(PROGRAMS[0].choice)
   const [customDays, setCustomDays] = useState(3)
@@ -96,7 +97,57 @@ export function Onboarding({ notify }: { notify: (m: string) => void }) {
       main
     )
 
+  const email = session?.user.email ?? null
+  const signedInBlock = (
+    <>
+      <h1>You're signed in</h1>
+      <p className="lede">
+        {email} is connected. Your cloud backup doesn't have a training setup yet, so let's create one. Three quick questions.
+      </p>
+    </>
+  )
+
+  if (restoring) {
+    return shell(
+      <div className="ob">
+        <div className="ob-body ob-center" style={{ alignItems: 'center', textAlign: 'center', justifyContent: 'center', display: 'flex', flex: 1 }}>
+          <div className="spinner" aria-hidden="true" />
+          <h1 style={{ fontSize: 24, marginTop: 18 }}>Restoring your training…</h1>
+          {email && <p className="lede" style={{ marginTop: 6 }}>Signed in as {email}</p>}
+        </div>
+      </div>,
+    )
+  }
+
   if (step === 0) {
+    if (wide && session)
+      return shell(
+        <div className="ob">
+          <div className="ob-body ob-center">
+            {signedInBlock}
+            <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
+              <button className="btn tint lg" style={{ minWidth: 200 }} onClick={() => setStep(1)}>Set up training</button>
+              <button className="btn lg" style={{ background: 'var(--surface)' }} onClick={() => void signOut()}>Use a different account</button>
+            </div>
+          </div>
+        </div>,
+      )
+    if (!wide && session)
+      return (
+        <div className="ob">
+          <div className="welcome-hero">
+            {hero}
+            <div className="card card-pad" style={{ marginTop: 18 }}>
+              <div style={{ fontWeight: 600 }}>Signed in as {email}</div>
+              <div className="small muted" style={{ marginTop: 2 }}>Your cloud backup doesn't have a training setup yet. Let's create one.</div>
+            </div>
+          </div>
+          <div className="ob-foot stack" style={{ gap: 6 }}>
+            <button className="btn tint lg block" onClick={() => setStep(1)}>Set up training</button>
+            <button className="btn ghost block" onClick={() => void signOut()}>Use a different account</button>
+          </div>
+        </div>
+      )
     if (wide)
       return shell(
         <div className="ob">

@@ -71,7 +71,17 @@ function useSync(notify: (m: string) => void) {
     }
   }, [run])
 
-  return { session, syncing, sync: run }
+  // True from the moment a session appears until its first sync finishes, so a fresh sign-in
+  // shows "restoring" instead of flashing setup before the cloud data has arrived.
+  const [restoring, setRestoring] = useState(false)
+  const userId = session?.user.id
+  useEffect(() => {
+    if (!userId) return
+    setRestoring(true)
+    void run(true).finally(() => setRestoring(false))
+  }, [userId, run])
+
+  return { session, syncing, restoring, sync: run }
 }
 
 export default function App() {
@@ -82,14 +92,11 @@ export default function App() {
   const [openDay, setOpenDay] = useState<string | null>(null)
   const wide = useMediaQuery('(min-width: 900px)')
   const { toast, show } = useToast()
-  const { session, syncing, sync } = useSync(show)
+  const { session, syncing, restoring, sync } = useSync(show)
 
   useEffect(() => {
     void ensureSeeded().then(() => setReady(true))
   }, [])
-  useEffect(() => {
-    if (session) void sync(true)
-  }, [session, sync])
 
   const profile = useProfile()
   const states = useStates()
@@ -101,13 +108,18 @@ export default function App() {
     if (custom) registerCustomExercises(custom.map((c) => c.definition))
   }, [custom])
   const clearOpenDay = useCallback(() => setOpenDay(null), [])
+  // Back up right after setup finishes so a second device can restore it immediately.
+  const onboarded = profile?.onboarded
+  useEffect(() => {
+    if (session && onboarded) void sync(true)
+  }, [session, onboarded, sync])
 
   if (!ready || !profile || !states || active === undefined || !sessions || program === undefined) return null
 
   if (!profile.onboarded && !active) {
     return (
       <>
-        <Onboarding notify={show} />
+        <Onboarding notify={show} session={session} restoring={restoring} />
         {toast}
       </>
     )
