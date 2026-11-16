@@ -5,7 +5,7 @@ import { getMeta } from '../data/db'
 import { enabledProviders, pendingChanges, sendLoginEmail, signInWithPassword, signInWithProvider, signOut, signUpWithPassword, type SocialProvider } from '../data/sync'
 
 /** Email + password sign-in (with an email-link fallback). Used in onboarding and You → Account. */
-export function SignInForm({ notify, onDone }: { notify: (m: string) => void; onDone?: () => void }) {
+export function SignInForm({ notify, onDone, showProviders = true }: { notify: (m: string) => void; onDone?: () => void; showProviders?: boolean }) {
   const [mode, setMode] = useState<'signin' | 'create'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -34,7 +34,7 @@ export function SignInForm({ notify, onDone }: { notify: (m: string) => void; on
   }, [])
   return (
     <div className="stack" style={{ gap: 12 }}>
-      {providers.length > 0 && (
+      {showProviders && providers.length > 0 && (
         <>
           {providers.map((p) => (
             <button
@@ -132,10 +132,10 @@ function relTime(iso: string) {
   return new Date(iso).toLocaleDateString()
 }
 
-const PROVIDER_NAME: Record<SocialProvider, string> = { google: 'Google', apple: 'Apple', github: 'GitHub', discord: 'Discord', facebook: 'Facebook' }
+export const PROVIDER_NAME: Record<SocialProvider, string> = { google: 'Google', apple: 'Apple', github: 'GitHub', discord: 'Discord', facebook: 'Facebook' }
 
 /** Official-style marks for each provider's sign-in button. */
-function ProviderMark({ provider }: { provider: SocialProvider }) {
+export function ProviderMark({ provider }: { provider: SocialProvider }) {
   const size = { width: 20, height: 20, 'aria-hidden': true } as const
   switch (provider) {
     case 'google':

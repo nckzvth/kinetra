@@ -1,11 +1,13 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { completeOnboarding, programForChoice, type ProgramChoice } from '../data/repo'
-import { isSyncConfigured, signOut } from '../data/sync'
+import { enabledProviders, isSyncConfigured, signInWithProvider, signOut, type SocialProvider } from '../data/sync'
+import { isStandalone, detectPlatform } from './install'
+import { InstallSteps } from './InstallBanner'
 import type { Session } from '@supabase/supabase-js'
 import { defaultStart, getExercise } from '../domain/catalog'
 import type { EquipmentPreset, UnitSystem } from '../domain/types'
 import { rulesFor } from '../domain/units'
-import { SignInForm } from './Account'
+import { PROVIDER_NAME, ProviderMark, SignInForm } from './Account'
 import { fmtWeight, useMediaQuery } from './hooks'
 import { Icon, type IconName } from './Icon'
 import { Sheet, Stepper } from './Sheet'
@@ -37,6 +39,12 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
   const [signingIn, setSigningIn] = useState(false)
   const [busy, setBusy] = useState(false)
   const wide = useMediaQuery('(min-width: 900px)')
+  const [providers, setProviders] = useState<SocialProvider[]>([])
+  const [leaving, setLeaving] = useState(false)
+  const platform = detectPlatform()
+  useEffect(() => {
+    void enabledProviders().then(setProviders)
+  }, [])
 
   const effectiveChoice: ProgramChoice = choice.kind === 'custom' ? { kind: 'custom', days: customDays } : choice
   const program = useMemo(() => programForChoice(effectiveChoice), [effectiveChoice.kind, customDays, choice])
@@ -84,7 +92,6 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
       <div className="feature"><Icon name="cloud" size={22} /><div><b>Phone and computer.</b> <span className="muted">Sign in once and your training follows you.</span></div></div>
     </>
   )
-  const signIn = <SignInForm notify={notify} onDone={() => { setSigningIn(false); notify('Signed in — restoring your data') }} />
 
   // On wide screens the pitch stays in a side panel and the steps sit beside it.
   const shell = (main: ReactNode) =>
@@ -119,45 +126,67 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
   const current = session && step === 0 ? 1 : step
 
   if (current === 0) {
+    const iphoneSafari = (platform === 'ios' || platform === 'ios-other-browser') && !isStandalone()
+    const actions = (
+      <div className="stack" style={{ gap: 10, width: '100%', maxWidth: wide ? 380 : undefined }}>
+        {providers.map((p) => (
+          <button
+            key={p}
+            className={`btn lg block social social-${p}`}
+            disabled={leaving}
+            onClick={() => {
+              setLeaving(true)
+              void signInWithProvider(p).catch(() => setLeaving(false))
+            }}
+          >
+            <ProviderMark provider={p} /> {leaving ? `Opening ${PROVIDER_NAME[p]}…` : `Continue with ${PROVIDER_NAME[p]}`}
+          </button>
+        ))}
+        {isSyncConfigured() && (
+          <button className={`btn lg block${providers.length ? '' : ' tint'}`} style={providers.length ? { background: 'var(--surface)' } : undefined} onClick={() => setSigningIn(true)}>
+            Continue with email
+          </button>
+        )}
+        <button className="btn ghost block" onClick={() => setStep(1)}>Set up without an account</button>
+        <p className="tiny muted" style={{ textAlign: 'center', margin: '-4px 8px 0' }}>
+          Without an account, your training stays on this device. You can add one any time.
+        </p>
+      </div>
+    )
+    const iphoneNote = iphoneSafari ? (
+      <div className="card card-pad" style={{ marginBottom: 16 }}>
+        <div style={{ fontWeight: 600 }}>On iPhone? Add to your Home Screen first.</div>
+        <p className="small muted" style={{ marginTop: 4 }}>
+          iPhone keeps home-screen apps separate from Safari, so signing in here means signing in again there. Install first and you'll only do it once.
+        </p>
+        <div style={{ marginTop: 12 }}><InstallSteps /></div>
+      </div>
+    ) : null
+    const emailSheet = signingIn && (
+      <Sheet title="Continue with email" onClose={() => setSigningIn(false)} right={<button className="btn ghost" onClick={() => setSigningIn(false)}>Cancel</button>}>
+        <SignInForm notify={notify} showProviders={false} onDone={() => setSigningIn(false)} />
+      </Sheet>
+    )
+
     if (wide)
       return shell(
         <div className="ob">
           <div className="ob-body ob-center">
-            {signingIn ? (
-              <>
-                <button className="back-btn" onClick={() => setSigningIn(false)}><Icon name="chevronLeft" size={24} /> Back</button>
-                <h1>Sign in</h1>
-                <p className="lede">Your program and history will download to this computer.</p>
-                {signIn}
-              </>
-            ) : (
-              <>
-                <h1>Let's set up your training</h1>
-                <p className="lede">Three quick questions. It takes less than a minute, and you can change everything later.</p>
-                <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-                  <button className="btn tint lg" style={{ minWidth: 200 }} onClick={() => setStep(1)}>Get started</button>
-                  {isSyncConfigured() && <button className="btn lg" style={{ background: 'var(--surface)' }} onClick={() => setSigningIn(true)}>I already have an account</button>}
-                </div>
-              </>
-            )}
+            <h1>Get started</h1>
+            <p className="lede">Sign in to keep your training backed up and on all your devices, or start right away on this one.</p>
+            {actions}
           </div>
+          {emailSheet}
         </div>,
       )
     return (
       <div className="ob">
-        <div className="welcome-hero">{hero}</div>
-        <div className="ob-foot stack" style={{ gap: 6 }}>
-          <button className="btn tint lg block" onClick={() => setStep(1)}>Get started</button>
-          {isSyncConfigured() && (
-            <button className="btn ghost block" onClick={() => setSigningIn(true)}>I already have an account</button>
-          )}
+        <div className="welcome-hero" style={{ paddingBottom: 16 }}>{hero}</div>
+        <div className="ob-foot">
+          {iphoneNote}
+          {actions}
         </div>
-        {signingIn && (
-          <Sheet title="Sign in" onClose={() => setSigningIn(false)} right={<button className="btn ghost" onClick={() => setSigningIn(false)}>Cancel</button>}>
-            <p className="small muted" style={{ margin: '0 4px 14px' }}>Your program and history will download to this device.</p>
-            {signIn}
-          </Sheet>
-        )}
+        {emailSheet}
       </div>
     )
   }

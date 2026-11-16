@@ -39,6 +39,14 @@ function steps(platform: InstallPlatform): ReactNode[] {
   }
 }
 
+/** Just the platform's install steps (or a one-tap Install button where the browser allows it). */
+export function InstallSteps() {
+  const install = useInstall()
+  if (install.standalone) return null
+  if (install.canPrompt) return <button className="btn tint sm" onClick={() => void install.prompt()}>Install</button>
+  return <ol className="install-steps" style={{ marginTop: 0 }}>{steps(install.platform).map((s, i) => <li key={i}>{s}</li>)}</ol>
+}
+
 /** The install pitch + action, shared by the Today banner and the You page. */
 export function InstallContent({ compact, onDone }: { compact?: boolean; onDone?: () => void }) {
   const install = useInstall()
@@ -74,9 +82,16 @@ export function InstallContent({ compact, onDone }: { compact?: boolean; onDone?
         )}
       </div>
       {!oneTap && open && (
-        <ol className="install-steps">
-          {steps(install.platform).map((s, i) => <li key={i}>{s}</li>)}
-        </ol>
+        <>
+          <ol className="install-steps">
+            {steps(install.platform).map((s, i) => <li key={i}>{s}</li>)}
+          </ol>
+          {(install.platform === 'ios' || install.platform === 'ios-other-browser') && (
+            <p className="tiny muted" style={{ marginTop: 12 }}>
+              iPhone keeps home-screen apps separate from Safari, so you'll sign in once more inside the app. After that it stays signed in.
+            </p>
+          )}
+        </>
       )}
     </>
   )
