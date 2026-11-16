@@ -5,7 +5,7 @@ import { getExercise, PRIMARY_LIFT_IDS } from '../domain/catalog'
 import { phaseOf } from '../domain/program'
 import { rulesFor } from '../domain/units'
 import type { ExerciseResult, ExerciseState, Profile, ProgramDef, WorkoutSession } from '../domain/types'
-import { fmtDuration, fmtWeight } from './hooks'
+import { fmtDuration, fmtWeight, useMediaQuery } from './hooks'
 import { Icon, type IconName } from './Icon'
 import { ActivityDetail } from './Activity'
 
@@ -153,6 +153,24 @@ export function HistoryView({
   unit: string
 }) {
   const s = sessions.find((x) => x.id === selected)
+  const wide = useMediaQuery('(min-width: 900px)')
+  if (wide) {
+    // List and detail side by side, like Mail on a Mac.
+    const shown = s ?? sessions[0]
+    return (
+      <div className="split">
+        <div className="split-list">
+          <h1 className="page-title" style={{ marginBottom: 14 }}>History</h1>
+          <div className="card" style={{ maxHeight: 'calc(100dvh - 160px)', overflowY: 'auto' }}>
+            <HistoryList sessions={sessions} selected={shown?.id ?? null} onSelect={onSelect} />
+          </div>
+        </div>
+        <div className="split-detail" style={{ paddingTop: 52 }}>
+          {shown ? <SessionResultView session={shown} program={program} unit={unit} /> : <div className="card empty">Finish a workout and it shows up here.</div>}
+        </div>
+      </div>
+    )
+  }
   if (s) {
     return (
       <>

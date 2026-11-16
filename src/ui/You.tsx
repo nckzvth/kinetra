@@ -9,7 +9,7 @@ import { incrementFor } from '../engine/progression'
 import { AccountStatus, SignInForm } from './Account'
 import { useCustomExercises } from './data'
 import { CreateExercise, ExercisePicker } from './ExercisePicker'
-import { fmtWeight } from './hooks'
+import { fmtWeight, useMediaQuery } from './hooks'
 import { Icon, type IconName } from './Icon'
 import { Sheet, Stepper } from './Sheet'
 import { NutritionRoadmap } from './Views'
@@ -37,8 +37,10 @@ export function YouView({
   openDay: string | null
   onOpenedDay: () => void
 }) {
+  const wide = useMediaQuery('(min-width: 900px)')
   const [page, setPage] = useState<Page>('home')
   const [dayId, setDayId] = useState<string | null>(null)
+  const [changing, setChanging] = useState(false)
   useEffect(() => {
     if (openDay) {
       setDayId(openDay)
@@ -47,36 +49,59 @@ export function YouView({
     }
   }, [openDay, onOpenedDay])
   useEffect(() => {
-    document.querySelector('.stage-scroll')?.scrollTo({ top: 0 })
-  }, [page])
+    if (!wide) document.querySelector('.stage-scroll')?.scrollTo({ top: 0 })
+  }, [page, wide])
 
-  const back = (to: Page = 'home') => (
-    <button className="back-btn" onClick={() => setPage(to)}>
-      <Icon name="chevronLeft" size={24} /> {to === 'home' ? 'You' : 'Program'}
-    </button>
-  )
-
-  if (page === 'program' && program)
-    return <>{back()}<ProgramPage profile={profile} program={program} onOpenDay={(id) => { setDayId(id); setPage('day') }} notify={notify} /></>
-  if (page === 'day' && program && dayId)
-    return <>{back('program')}<DayEditor profile={profile} states={states} program={program} dayId={dayId} onDeleted={() => setPage('program')} /></>
-  if (page === 'exercises') return <>{back()}<ExercisesPage profile={profile} states={states} program={program} /></>
-  if (page === 'equipment') return <>{back()}<EquipmentPage profile={profile} notify={notify} /></>
-  if (page === 'account')
-    return (
-      <>
-        {back()}
-        <h1 className="page-title">Account</h1>
-        <p className="muted" style={{ margin: '8px 4px 18px' }}>Back up your training and use it on your phone and computer.</p>
-        {session ? <AccountStatus session={session} syncing={syncing} onSync={onSync} /> : <SignInForm notify={notify} />}
-      </>
+  // On wide screens the menu stays on the left and the selected page fills the right.
+  const shown: Page = wide && page === 'home' ? 'program' : page
+  const back = (to: Page = 'home') =>
+    wide && to === 'home' ? null : (
+      <button className="back-btn" onClick={() => setPage(to)}>
+        <Icon name="chevronLeft" size={24} /> {to === 'home' ? 'You' : 'Program'}
+      </button>
     )
-  if (page === 'data') return <>{back()}<DataPage notify={notify} /></>
-  if (page === 'nutrition') return <>{back()}<NutritionRoadmap profile={profile} /></>
+
+  const detail = (() => {
+    switch (shown) {
+      case 'program':
+        return program ? (
+          <>{back()}<ProgramPage profile={profile} program={program} onOpenDay={(id) => { setDayId(id); setPage('day') }} notify={notify} /></>
+        ) : (
+          <>
+            {back()}
+            <h1 className="page-title">Program</h1>
+            <p className="muted" style={{ margin: '8px 4px 18px' }}>You're logging workouts without a plan. Pick one any time.</p>
+            <button className="btn tint" onClick={() => setChanging(true)}>Choose a program</button>
+          </>
+        )
+      case 'day':
+        return program && dayId ? <>{back('program')}<DayEditor profile={profile} states={states} program={program} dayId={dayId} onDeleted={() => setPage('program')} /></> : null
+      case 'exercises':
+        return <>{back()}<ExercisesPage profile={profile} states={states} program={program} /></>
+      case 'equipment':
+        return <>{back()}<EquipmentPage profile={profile} notify={notify} /></>
+      case 'account':
+        return (
+          <>
+            {back()}
+            <h1 className="page-title">Account</h1>
+            <p className="muted" style={{ margin: '8px 4px 18px' }}>Back up your training and use it on your phone and computer.</p>
+            {session ? <AccountStatus session={session} syncing={syncing} onSync={onSync} /> : <SignInForm notify={notify} />}
+          </>
+        )
+      case 'data':
+        return <>{back()}<DataPage notify={notify} /></>
+      case 'nutrition':
+        return <>{back()}<NutritionRoadmap profile={profile} /></>
+      default:
+        return null
+    }
+  })()
 
   const r = rulesFor(profile.unit_system)
   const presetLabel = { GYM: 'Gym', HOME: 'Home', NONE: 'No equipment' }[profile.equipment_preset]
-  return (
+  const cur = (p: Page) => shown === p || (p === 'program' && shown === 'day')
+  const menu = (
     <>
       <h1 className="page-title">You</h1>
       <div className="card" style={{ marginTop: 18 }}>
@@ -85,33 +110,41 @@ export function YouView({
           <NameField profile={profile} />
         </div>
       </div>
-
       <div className="group-header">Training</div>
       <div className="card list">
-        {program ? (
-          <NavCell icon="list" color="#0a84ff" label="Program" value={program.name} onClick={() => setPage('program')} />
-        ) : (
-          <NavCell icon="list" color="#0a84ff" label="Program" value="Just tracking" onClick={() => setPage('program')} />
-        )}
-        <NavCell icon="dumbbell" color="#ff9f0a" label="Exercises and weights" onClick={() => setPage('exercises')} />
-        <NavCell icon="building" color="#8e8e93" label="Equipment and units" value={`${presetLabel} · ${r.label}`} onClick={() => setPage('equipment')} />
+        <NavCell icon="list" color="#0a84ff" label="Program" value={program ? program.name : 'Just tracking'} current={wide && cur('program')} onClick={() => setPage('program')} />
+        <NavCell icon="dumbbell" color="#ff9f0a" label="Exercises and weights" current={wide && cur('exercises')} onClick={() => setPage('exercises')} />
+        <NavCell icon="building" color="#8e8e93" label="Equipment and units" value={`${presetLabel} · ${r.label}`} current={wide && cur('equipment')} onClick={() => setPage('equipment')} />
       </div>
-
       <div className="group-header">More</div>
       <div className="card list">
-        <NavCell icon="leaf" color="#30d158" label="Nutrition" value="Coming soon" onClick={() => setPage('nutrition')} />
-        <NavCell icon={session ? 'cloud' : 'cloudOff'} color="#5e5ce6" label="Account and sync" value={session ? 'On' : 'Off'} onClick={() => setPage('account')} />
-        <NavCell icon="database" color="#636366" label="Backup and reset" onClick={() => setPage('data')} />
+        <NavCell icon="leaf" color="#30d158" label="Nutrition" value="Coming soon" current={wide && cur('nutrition')} onClick={() => setPage('nutrition')} />
+        <NavCell icon={session ? 'cloud' : 'cloudOff'} color="#5e5ce6" label="Account and sync" value={session ? 'On' : 'Off'} current={wide && cur('account')} onClick={() => setPage('account')} />
+        <NavCell icon="database" color="#636366" label="Backup and reset" current={wide && cur('data')} onClick={() => setPage('data')} />
       </div>
+    </>
+  )
 
-      {page === 'program' && !program && <ChangeProgramSheet onClose={() => setPage('home')} notify={notify} />}
+  return (
+    <>
+      {wide ? (
+        <div className="split">
+          <div className="split-list">{menu}</div>
+          <div className="split-detail" style={{ paddingTop: 4 }}>{detail}</div>
+        </div>
+      ) : page === 'home' ? (
+        menu
+      ) : (
+        detail
+      )}
+      {changing && <ChangeProgramSheet onClose={() => setChanging(false)} notify={notify} />}
     </>
   )
 }
 
-function NavCell({ icon, color, label, value, onClick }: { icon: IconName; color: string; label: string; value?: string; onClick: () => void }) {
+function NavCell({ icon, color, label, value, current, onClick }: { icon: IconName; color: string; label: string; value?: string; current?: boolean; onClick: () => void }) {
   return (
-    <button className="cell" onClick={onClick}>
+    <button className="cell" aria-current={current ? 'true' : undefined} onClick={onClick}>
       <span className="cell-icon" style={{ background: color }}><Icon name={icon} size={18} /></span>
       <span className="grow">{label}</span>
       {value && <span className="cell-value small" style={{ maxWidth: '45%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</span>}

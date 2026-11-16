@@ -197,7 +197,7 @@ export default function App() {
   const stage = (
     <main className="stage">
       <div className="stage-scroll">
-        <div className="stage-inner">{content}</div>
+        <div className={`stage-inner${(view === 'today' && (active || summary)) || view === 'log' ? ' narrow' : ''}`}>{content}</div>
       </div>
       <TimerDock />
     </main>

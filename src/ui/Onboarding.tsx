@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { completeOnboarding, programForChoice, type ProgramChoice } from '../data/repo'
 import { isSyncConfigured } from '../data/sync'
 import { defaultStart, getExercise } from '../domain/catalog'
 import type { EquipmentPreset, UnitSystem } from '../domain/types'
 import { rulesFor } from '../domain/units'
 import { SignInForm } from './Account'
-import { fmtWeight } from './hooks'
+import { fmtWeight, useMediaQuery } from './hooks'
 import { Icon, type IconName } from './Icon'
 import { Sheet, Stepper } from './Sheet'
 
@@ -35,6 +35,7 @@ export function Onboarding({ notify }: { notify: (m: string) => void }) {
   const [weights, setWeights] = useState<Record<string, number>>({})
   const [signingIn, setSigningIn] = useState(false)
   const [busy, setBusy] = useState(false)
+  const wide = useMediaQuery('(min-width: 900px)')
 
   const effectiveChoice: ProgramChoice = choice.kind === 'custom' ? { kind: 'custom', days: customDays } : choice
   const program = useMemo(() => programForChoice(effectiveChoice), [effectiveChoice.kind, customDays, choice])
@@ -69,16 +70,57 @@ export function Onboarding({ notify }: { notify: (m: string) => void }) {
 
   const next = () => (step >= lastStep ? void finish() : setStep(step + 1))
 
+  const hero = (
+    <>
+      <div className="app-glyph"><Icon name="barbell" size={40} /></div>
+      <h1 className="hero-title">Train with a plan that adapts.</h1>
+      <div className="feature"><Icon name="check" size={22} /><div><b>Tap to log.</b> <span className="muted">One tap per set. The rest timer starts on its own.</span></div></div>
+      <div className="feature"><Icon name="arrowUp" size={22} /><div><b>Knows what's next.</b> <span className="muted">Adds weight when you're ready, eases off when you stall.</span></div></div>
+      <div className="feature"><Icon name="activity" size={22} /><div><b>More than lifting.</b> <span className="muted">Runs, rounds, climbs and holds in the same place.</span></div></div>
+      <div className="feature"><Icon name="cloud" size={22} /><div><b>Phone and computer.</b> <span className="muted">Sign in once and your training follows you.</span></div></div>
+    </>
+  )
+  const signIn = <SignInForm notify={notify} onDone={() => { setSigningIn(false); notify('Signed in — restoring your data') }} />
+
+  // On wide screens the pitch stays in a side panel and the steps sit beside it.
+  const shell = (main: ReactNode) =>
+    wide ? (
+      <div className="ob-shell">
+        <aside className="ob-aside">{hero}</aside>
+        {main}
+      </div>
+    ) : (
+      main
+    )
+
   if (step === 0) {
+    if (wide)
+      return shell(
+        <div className="ob">
+          <div className="ob-body ob-center">
+            {signingIn ? (
+              <>
+                <button className="back-btn" onClick={() => setSigningIn(false)}><Icon name="chevronLeft" size={24} /> Back</button>
+                <h1>Sign in</h1>
+                <p className="lede">Your program and history will download to this computer.</p>
+                {signIn}
+              </>
+            ) : (
+              <>
+                <h1>Let's set up your training</h1>
+                <p className="lede">Three quick questions. It takes less than a minute, and you can change everything later.</p>
+                <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
+                  <button className="btn tint lg" style={{ minWidth: 200 }} onClick={() => setStep(1)}>Get started</button>
+                  {isSyncConfigured() && <button className="btn lg" style={{ background: 'var(--surface)' }} onClick={() => setSigningIn(true)}>I already have an account</button>}
+                </div>
+              </>
+            )}
+          </div>
+        </div>,
+      )
     return (
       <div className="ob">
-        <div className="welcome-hero">
-          <div className="app-glyph"><Icon name="barbell" size={40} /></div>
-          <h1 style={{ fontSize: 40 }}>Train with a plan that adapts.</h1>
-          <div className="feature"><Icon name="check" size={22} /><div><b>Tap to log.</b> <span className="muted">One tap per set. Rest timer starts on its own.</span></div></div>
-          <div className="feature"><Icon name="arrowUp" size={22} /><div><b>Knows what's next.</b> <span className="muted">Adds weight when you're ready, eases off when you stall.</span></div></div>
-          <div className="feature"><Icon name="activity" size={22} /><div><b>More than lifting.</b> <span className="muted">Runs, rounds, climbs and holds in the same place.</span></div></div>
-        </div>
+        <div className="welcome-hero">{hero}</div>
         <div className="ob-foot stack" style={{ gap: 6 }}>
           <button className="btn tint lg block" onClick={() => setStep(1)}>Get started</button>
           {isSyncConfigured() && (
@@ -88,15 +130,15 @@ export function Onboarding({ notify }: { notify: (m: string) => void }) {
         {signingIn && (
           <Sheet title="Sign in" onClose={() => setSigningIn(false)} right={<button className="btn ghost" onClick={() => setSigningIn(false)}>Cancel</button>}>
             <p className="small muted" style={{ margin: '0 4px 14px' }}>Your program and history will download to this device.</p>
-            <SignInForm notify={notify} onDone={() => { setSigningIn(false); notify('Signed in — restoring your data') }} />
+            {signIn}
           </Sheet>
         )}
       </div>
     )
   }
 
-  return (
-    <div className="ob">
+  return shell(
+    <div className="ob" onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'BUTTON' && !busy && next()}>
       <div className="ob-top">
         <button className="back-btn" onClick={() => setStep(step - 1)} aria-label="Back">
           <Icon name="chevronLeft" size={24} /> Back
@@ -190,6 +232,6 @@ export function Onboarding({ notify }: { notify: (m: string) => void }) {
           {step >= lastStep ? (choice.kind === 'track' ? 'Start tracking' : 'Start training') : 'Continue'}
         </button>
       </div>
-    </div>
+    </div>,
   )
 }

@@ -67,7 +67,8 @@ function ProgramToday({
   }
 
   return (
-    <>
+    <div className="today-grid">
+      <div className="t-head">
       <div className="today-date">{todayLine()}</div>
       <h1 className="today-title">{plan.title}</h1>
       <div className="meta-row">
@@ -76,9 +77,10 @@ function ProgramToday({
         <span><Icon name="clock" size={15} />~{phase.target_duration_minutes} min</span>
         {!isToday && <span><Icon name="calendar" size={15} />Suggested {relativeDayLabel(suggested, today)}</span>}
       </div>
+      </div>
 
       {gates && (
-        <div className="card card-pad" style={{ marginTop: 18 }}>
+        <div className="card card-pad t-gate">
           <div className="spread small">
             <span style={{ fontWeight: 600 }}>{phase.name.replace(/^Phase \d+: /, '')}</span>
             <span className="muted num">{profile.phase_gate_progress} of {phase.gate_required}</span>
@@ -92,15 +94,16 @@ function ProgramToday({
         </div>
       )}
 
+      <div className="t-main">
       {plan.exercises.length === 0 ? (
-        <div className="card empty" style={{ marginTop: 18 }}>
+        <div className="card empty">
           <p style={{ fontWeight: 600, color: 'var(--text)' }}>{plan.title} has no exercises yet</p>
           <p className="small" style={{ marginTop: 4 }}>Add a few and they'll show up here every time this day comes around.</p>
           <button className="btn tint" style={{ marginTop: 16 }} onClick={() => onEditDay(plan.rotation_code)}>Add exercises</button>
         </div>
       ) : (
         <>
-          <div className="card list" style={{ marginTop: 18 }}>
+          <div className="card list">
             {plan.exercises.map((ex) => (
               <button key={ex.key} className="ex-row" onClick={() => setEditing(ex)}>
                 <div className="grow">
@@ -123,7 +126,9 @@ function ProgramToday({
         </>
       )}
       <button className="btn ghost block" style={{ marginTop: 4 }} onClick={() => setPicking(true)}>Do a different workout</button>
+      </div>
 
+      <div className="t-up">
       <div className="section-title"><h2>Coming up</h2></div>
       <div className="card list">
         {upcoming.slice(1).map((d, i) => {
@@ -136,6 +141,7 @@ function ProgramToday({
             </div>
           )
         })}
+      </div>
       </div>
 
       {picking && (
@@ -161,7 +167,7 @@ function ProgramToday({
         </Sheet>
       )}
       {editing && <WorkingWeightSheet ex={editing} profile={profile} onClose={() => setEditing(null)} />}
-    </>
+    </div>
   )
 }
 
