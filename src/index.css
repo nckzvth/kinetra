@@ -514,3 +514,7 @@ button.stream-row:active { background: var(--surface-2); }
 
 .timer-pill { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--info-soft); color: var(--tint); font-size: 15px; font-weight: 600; flex-shrink: 0; }
 .timer-pill.running { background: var(--tint); color: #fff; }
+
+.install-steps { margin: 14px 0 0; padding: 0 0 0 22px; display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.45; }
+.install-steps li::marker { color: var(--text-2); font-weight: 600; }
+.install-banner .icon-btn { color: var(--text-3); }

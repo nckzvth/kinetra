@@ -11,6 +11,7 @@ import { Icon, type IconName } from './ui/Icon'
 import { Onboarding } from './ui/Onboarding'
 import { TimerDock } from './ui/TimerDock'
 import { TodayView } from './ui/Today'
+import { InstallBanner } from './ui/InstallBanner'
 import { HistoryView, ProgressView, SessionResultView, useToast } from './ui/Views'
 import { ActiveWorkoutView } from './ui/Workout'
 import { YouView } from './ui/You'
@@ -163,6 +164,8 @@ export default function App() {
             />
           )
         return (
+          <>
+          <InstallBanner />
           <TodayView
             profile={profile}
             states={states}
@@ -174,6 +177,7 @@ export default function App() {
             }}
             onLogActivity={() => go('log')}
           />
+          </>
         )
       case 'history':
         return <HistoryView sessions={sessions} selected={historyId} onSelect={setHistoryId} program={program} unit={unit} />

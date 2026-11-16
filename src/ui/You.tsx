@@ -13,8 +13,10 @@ import { fmtWeight, useMediaQuery } from './hooks'
 import { Icon, type IconName } from './Icon'
 import { Sheet, Stepper } from './Sheet'
 import { NutritionRoadmap } from './Views'
+import { InstallContent } from './InstallBanner'
+import { isStandalone } from './install'
 
-type Page = 'home' | 'program' | 'day' | 'exercises' | 'equipment' | 'account' | 'data' | 'nutrition' | 'friends'
+type Page = 'home' | 'program' | 'day' | 'exercises' | 'equipment' | 'account' | 'data' | 'nutrition' | 'friends' | 'install'
 
 export function YouView({
   profile,
@@ -95,6 +97,15 @@ export function YouView({
         return <>{back()}<NutritionRoadmap profile={profile} /></>
       case 'friends':
         return <>{back()}<FriendsRoadmap /></>
+      case 'install':
+        return (
+          <>
+            {back()}
+            <h1 className="page-title">Install the app</h1>
+            <div className="card card-pad" style={{ marginTop: 18 }}><InstallContent /></div>
+            <p className="group-footer">Installed, Kinetra keeps your screen awake during workouts and opens straight to Today. Your data is the same either way.</p>
+          </>
+        )
       default:
         return null
     }
@@ -124,6 +135,7 @@ export function YouView({
         <NavCell icon="leaf" color="#30d158" label="Nutrition" value="Coming soon" current={wide && cur('nutrition')} onClick={() => setPage('nutrition')} />
         <NavCell icon={session ? 'cloud' : 'cloudOff'} color="#5e5ce6" label="Account and sync" value={session ? 'On' : 'Off'} current={wide && cur('account')} onClick={() => setPage('account')} />
         <NavCell icon="database" color="#636366" label="Backup and reset" current={wide && cur('data')} onClick={() => setPage('data')} />
+        <NavCell icon="arrowDown" color="#30d158" label="Add to Home Screen" value={isStandalone() ? 'Installed' : undefined} current={wide && cur('install')} onClick={() => setPage('install')} />
       </div>
     </>
   )
