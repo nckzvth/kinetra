@@ -70,6 +70,8 @@
 /* ─── Base ───────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { height: 100%; }
+/* The app scrolls inside its own panes; the page itself never scrolls or rubber-bands. */
+html, body { overflow: hidden; overscroll-behavior: none; }
 body {
   margin: 0;
   background: var(--bg);
@@ -126,8 +128,10 @@ h1, h2, h3, h4, p { margin: 0; }
   flex: 1;
   min-height: 0;
 }
-.stage-scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
-.stage-inner { max-width: 680px; margin: 0 auto; padding: calc(14px + var(--safe-t)) 16px 32px; }
+.stage-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+/* Always 1px taller than the pane, so a swipe on a short page bounces the content (like
+   native iOS lists) instead of falling through and dragging the whole app and its tab bar. */
+.stage-inner { max-width: 680px; margin: 0 auto; padding: calc(14px + var(--safe-t)) 16px 32px; min-height: calc(100% + 1px); }
 .shell .stage-inner { padding: 36px 32px 48px; }
 
 .rail {
@@ -379,18 +383,22 @@ button.ex-row:active { background: var(--surface-2); }
 
 /* ─── Sheets ───────────────────────────────────────────────────────────── */
 .scrim {
-  position: fixed; inset: 0; background: var(--scrim); z-index: 50;
+  /* Sized to the visible viewport so sheets ride above the iPhone keyboard. */
+  position: fixed; left: 0; right: 0; top: var(--vvt, 0px); height: var(--vvh, 100%);
+  background: var(--scrim); z-index: 50; overscroll-behavior: none;
   display: flex; align-items: flex-end; justify-content: center;
   animation: fade 0.18s;
 }
 @media (min-width: 768px) { .scrim { align-items: center; } }
 .sheet {
-  width: 100%; max-width: 520px; max-height: 92dvh; overflow-y: auto;
+  width: 100%; max-width: 520px; max-height: calc(var(--vvh, 100dvh) - var(--safe-t) - 8px); overflow-y: auto; overscroll-behavior: contain;
   background: var(--bg); border-radius: 14px 14px 0 0; box-shadow: var(--shadow-lg);
   padding: 8px 16px calc(20px + var(--safe-b));
   animation: rise 0.26s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
-@media (min-width: 768px) { .sheet { border-radius: 16px; padding-bottom: 20px; } }
+@media (min-width: 768px) { .sheet { border-radius: 16px; padding-bottom: 20px; max-height: min(92dvh, calc(var(--vvh, 100dvh) - 32px)); } }
+/* With the keyboard up there's no home indicator to clear. */
+.kb-open .sheet { padding-bottom: 12px; }
 .sheet-grip { width: 36px; height: 5px; border-radius: 3px; background: var(--line-strong); margin: 2px auto 10px; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; min-height: 40px; margin-bottom: 10px; gap: 8px; }
 .sheet-head h3 { font-size: 19px; font-weight: 700; text-align: center; flex: 1; }
