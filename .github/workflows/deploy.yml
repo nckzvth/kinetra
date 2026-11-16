@@ -23,7 +23,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # npm install (not ci): the lockfile is generated on macOS and lacks some Linux-only optional packages.
+      - run: npm install --no-audit --no-fund
       - run: npm test
       - run: npm run build
         env:
