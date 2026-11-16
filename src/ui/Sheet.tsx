@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 /**
  * Bottom sheet (centered dialog on wide screens). Pass `title` for a simple header, or
@@ -22,7 +23,8 @@ export function Sheet({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
-  return (
+  // Portal to <body> so a sheet opened from inside a sticky or scrolling area is never clipped or layered under it.
+  return createPortal(
     <div className="scrim" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grip" />
@@ -35,7 +37,8 @@ export function Sheet({
         )}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

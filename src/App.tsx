@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ensureSeeded } from './data/repo'
 import { consumeAuthError, describeAuthError, enabledProviders, getClient, isSyncConfigured, signInWithProvider, syncNow } from './data/sync'
 import { Sheet } from './ui/Sheet'
+import { HandoffApprover } from './ui/BrowserSignIn'
 import { registerCustomExercises } from './domain/catalog'
 import { rulesFor } from './domain/units'
 import { ActivityView } from './ui/Activity'
@@ -151,6 +152,7 @@ export default function App() {
       <>
         <Onboarding notify={show} session={session} restoring={restoring} />
         {authSheet}
+        <HandoffApprover session={session} notify={show} />
         {toast}
       </>
     )
@@ -262,6 +264,7 @@ export default function App() {
           ))}
         </nav>
         {authSheet}
+        <HandoffApprover session={session} notify={show} />
         {toast}
       </div>
     )
@@ -287,6 +290,7 @@ export default function App() {
       </nav>
       {stage}
       {authSheet}
+      <HandoffApprover session={session} notify={show} />
       {toast}
     </div>
   )

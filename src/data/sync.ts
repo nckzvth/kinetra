@@ -296,3 +296,115 @@ export function describeAuthError(e: ReturnedAuthError): string {
   if (d.includes('expired')) return 'That sign-in link has expired. Try signing in again.'
   return "Sign-in didn't finish. Please try again."
 }
+
+// ─── Sign in with your browser (home-screen app ← browser handoff) ─────────
+
+const BROWSER_SIGNIN_KEY = 'browser-signin'
+const HANDOFF_PARAM = 'handoff'
+const PENDING_HANDOFF_KEY = 'pending-handoff'
+
+function randomHex(bytes = 32): string {
+  const a = new Uint8Array(bytes)
+  crypto.getRandomValues(a)
+  return [...a].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** Home-screen app: registers a one-time request and opens the browser to approve it. */
+export async function startBrowserSignIn(): Promise<string> {
+  const c = await getClient()
+  if (!c) throw new Error('Supabase is not configured')
+  const id = randomHex()
+  const { error } = await c.rpc('create_auth_handoff', { p_id: id })
+  if (error) throw error
+  try {
+    localStorage.setItem(BROWSER_SIGNIN_KEY, JSON.stringify({ id, at: Date.now() }))
+  } catch {
+    /* ignore */
+  }
+  openBrowserForHandoff(id)
+  return id
+}
+
+export function openBrowserForHandoff(id: string) {
+  const url = new URL(import.meta.env.BASE_URL, location.origin)
+  url.searchParams.set(HANDOFF_PARAM, id)
+  // From an installed app, a new window opens in the phone's browser rather than inside the app.
+  window.open(url.href, '_blank', 'noopener')
+}
+
+/** The in-progress request on this device, if one was started in the last 10 minutes. */
+export function currentBrowserSignIn(): string | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(BROWSER_SIGNIN_KEY) ?? 'null') as { id: string; at: number } | null
+    if (v && Date.now() - v.at < 10 * 60 * 1000) return v.id
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+export function cancelBrowserSignIn() {
+  try {
+    localStorage.removeItem(BROWSER_SIGNIN_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Home-screen app: collects the approval once it exists and signs in with it. */
+export async function claimBrowserSignIn(id: string): Promise<boolean> {
+  const c = await getClient()
+  if (!c) return false
+  const { data, error } = await c.rpc('claim_auth_handoff', { p_id: id })
+  if (error || !data) return false
+  let res = await c.auth.verifyOtp({ token_hash: data as string, type: 'magiclink' })
+  if (res.error) res = await c.auth.verifyOtp({ token_hash: data as string, type: 'email' })
+  if (res.error) throw res.error
+  cancelBrowserSignIn()
+  return true
+}
+
+/** Browser: picks up ?handoff=… once (kept through a sign-in redirect) and tidies the URL. */
+export function consumeHandoffParam(): string | null {
+  const params = new URLSearchParams(location.search)
+  const id = params.get(HANDOFF_PARAM)
+  if (id && /^[0-9a-f]{32,}$/.test(id)) {
+    params.delete(HANDOFF_PARAM)
+    const rest = params.toString()
+    history.replaceState(null, '', location.pathname + (rest ? `?${rest}` : '') + location.hash)
+    try {
+      sessionStorage.setItem(PENDING_HANDOFF_KEY, id)
+    } catch {
+      /* ignore */
+    }
+    return id
+  }
+  try {
+    return sessionStorage.getItem(PENDING_HANDOFF_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function clearPendingHandoff() {
+  try {
+    sessionStorage.removeItem(PENDING_HANDOFF_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+export type ApproveResult = { ok: true } | { ok: false; reason: 'expired' | 'used' | 'signed_out' | 'failed' }
+
+/** Browser: approves the request using the account signed in here. */
+export async function approveHandoff(id: string): Promise<ApproveResult> {
+  const c = await getClient()
+  if (!c) return { ok: false, reason: 'failed' }
+  const { error } = await c.functions.invoke('auth-handoff', { body: { id } })
+  if (!error) return { ok: true }
+  const status = (error as { context?: Response }).context?.status
+  if (status === 410 || status === 404) return { ok: false, reason: 'expired' }
+  if (status === 409) return { ok: false, reason: 'used' }
+  if (status === 401) return { ok: false, reason: 'signed_out' }
+  return { ok: false, reason: 'failed' }
+}

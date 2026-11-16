@@ -3,6 +3,7 @@ import { completeOnboarding, programForChoice, type ProgramChoice } from '../dat
 import { enabledProviders, isSyncConfigured, signInWithProvider, signOut, type SocialProvider } from '../data/sync'
 import { isStandalone, detectPlatform } from './install'
 import { InstallSteps } from './InstallBanner'
+import { BrowserSignInButton } from './BrowserSignIn'
 import type { Session } from '@supabase/supabase-js'
 import { defaultStart, getExercise } from '../domain/catalog'
 import type { EquipmentPreset, UnitSystem } from '../domain/types'
@@ -129,6 +130,14 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
     const iphoneSafari = (platform === 'ios' || platform === 'ios-other-browser') && !isStandalone()
     const actions = (
       <div className="stack" style={{ gap: 10, width: '100%', maxWidth: wide ? 380 : undefined }}>
+        {isStandalone() && isSyncConfigured() && (
+          <>
+            <BrowserSignInButton notify={notify} />
+            <p className="tiny muted" style={{ textAlign: 'center', margin: '-2px 8px 4px' }}>
+              Uses the account you're already signed into in your browser. No passwords to type.
+            </p>
+          </>
+        )}
         {providers.map((p) => (
           <button
             key={p}
