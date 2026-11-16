@@ -225,7 +225,7 @@ export default function App() {
       <nav className="rail" aria-label="Main">
         <div className="brand">
           <span className="brand-mark"><Icon name="barbell" size={17} /></span>
-          {profile.display_name ? `${profile.display_name}'s training` : 'Training'}
+          Kinetra
         </div>
         {NAV.map((n) => (
           <button key={n.view} className="rail-item" aria-current={view === n.view ? 'page' : undefined} onClick={() => go(n.view)}>

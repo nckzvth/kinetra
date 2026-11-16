@@ -734,7 +734,7 @@ function DataPage({ notify }: { notify: (m: string) => void }) {
             const blob = new Blob([JSON.stringify(await exportAll(), null, 2)], { type: 'application/json' })
             const a = document.createElement('a')
             a.href = URL.createObjectURL(blob)
-            a.download = `training-backup-${new Date().toISOString().slice(0, 10)}.json`
+            a.download = `kinetra-backup-${new Date().toISOString().slice(0, 10)}.json`
             a.click()
             URL.revokeObjectURL(a.href)
           }}

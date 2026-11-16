@@ -72,7 +72,10 @@ export function Onboarding({ notify }: { notify: (m: string) => void }) {
 
   const hero = (
     <>
-      <div className="app-glyph"><Icon name="barbell" size={40} /></div>
+      <div className="row" style={{ gap: 12, marginBottom: 10 }}>
+        <div className="app-glyph" style={{ marginBottom: 0 }}><Icon name="barbell" size={40} /></div>
+        <span className="wordmark">Kinetra</span>
+      </div>
       <h1 className="hero-title">Train with a plan that adapts.</h1>
       <div className="feature"><Icon name="check" size={22} /><div><b>Tap to log.</b> <span className="muted">One tap per set. The rest timer starts on its own.</span></div></div>
       <div className="feature"><Icon name="arrowUp" size={22} /><div><b>Knows what's next.</b> <span className="muted">Adds weight when you're ready, eases off when you stall.</span></div></div>

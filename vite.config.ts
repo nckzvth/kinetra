@@ -12,9 +12,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon-180x180.png'],
       manifest: {
-        name: 'PPL Ramp — Training & Nutrition',
-        short_name: 'PPL Ramp',
-        description: 'Gated PPL progression engine with tap-to-log workouts, rest timer and plate calculator.',
+        name: 'Kinetra',
+        short_name: 'Kinetra',
+        description: 'Tap-to-log training with smart progression, activity logging and friends.',
         theme_color: '#0d0d0f',
         background_color: '#0d0d0f',
         display: 'standalone',

@@ -18,7 +18,7 @@ import { epley } from '../engine/e1rm'
 import { buildSessionPlan, emptyPlan, planExercise } from '../engine/plan'
 import { evaluateSession } from '../engine/progression'
 import { toISODate } from '../engine/schedule'
-import { db, type ActiveWorkout } from './db'
+import { db, migrateLegacyDb, type ActiveWorkout } from './db'
 
 export function uuid(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
@@ -32,6 +32,7 @@ export function uuid(): string {
 const nowISO = () => new Date().toISOString()
 
 export async function ensureSeeded(): Promise<void> {
+  await migrateLegacyDb()
   await db.transaction('rw', db.profile, async () => {
     if (await db.profile.get('me')) return
     await db.profile.put(createDefaultProfile(nowISO()))

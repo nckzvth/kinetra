@@ -42,8 +42,8 @@ export class AppDB extends Dexie {
   active!: EntityTable<ActiveWorkout, 'id'>
   meta!: EntityTable<MetaRow, 'key'>
 
-  constructor() {
-    super('ppl-platform')
+  constructor(name = 'kinetra') {
+    super(name)
     this.version(1).stores({
       profile: 'id, dirty',
       exercise_states: 'exercise_id, dirty',
@@ -70,6 +70,25 @@ export class AppDB extends Dexie {
 }
 
 export const db = new AppDB()
+
+/** Name of the on-device database before the app was renamed to Kinetra. */
+const LEGACY_DB = 'ppl-platform'
+
+/** One-time copy of on-device data from the pre-rename database, then removes it. */
+export async function migrateLegacyDb() {
+  if (!(await Dexie.exists(LEGACY_DB))) return
+  const old = new AppDB(LEGACY_DB)
+  await old.open()
+  if ((await db.profile.count()) === 0) {
+    // Read everything first: awaiting another database inside a transaction would end it.
+    const copies = await Promise.all(old.tables.map(async (t) => ({ name: t.name, rows: await t.toArray() })))
+    await db.transaction('rw', db.tables, async () => {
+      for (const c of copies) if (c.rows.length) await db.table(c.name).bulkPut(c.rows)
+    })
+  }
+  old.close()
+  await Dexie.delete(LEGACY_DB)
+}
 
 /** Tables that sync to Supabase, mapped to their server table names. */
 export const SYNC_TABLES = [
