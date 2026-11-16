@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     }
     if (k.kind === 'note') {
       title = about ? `${from} on your ${about}` : `${from} sent you a note`
-      body = k.message ?? ''
+      body = k.message || (k.gif ? 'Sent you a GIF' : '')
     } else {
       const emoji = k.kind === 'fist' ? '👊' : k.emoji ?? '👊'
       title = `${from} ${emoji}`

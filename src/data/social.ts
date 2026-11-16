@@ -58,8 +58,31 @@ export interface Kudos {
   /** For reactions (legacy 'fist' rows count as 👊). */
   emoji: string | null
   message: string | null
+  /** A GIPHY GIF attached to a note. */
+  gif?: NoteGif | null
   created_at: string
   seen_at: string | null
+}
+
+export interface NoteGif {
+  url: string
+  still?: string | null
+  w: number
+  h: number
+  title?: string
+}
+
+export interface GifResult extends NoteGif {
+  id: string
+}
+
+/** Searches GIPHY through our server function (empty query = trending). */
+export async function searchGifs(q: string, offset = 0): Promise<{ gifs: GifResult[]; more: boolean }> {
+  const c = await getClient()
+  if (!c) throw new Error('Sign in first')
+  const { data, error } = await c.functions.invoke('gif-search', { body: { q, offset } })
+  if (error) throw new Error('GIFs are unavailable right now')
+  return data as { gifs: GifResult[]; more: boolean }
 }
 
 export interface LiveSession {
@@ -335,10 +358,15 @@ export async function removeReaction(activityId: string, emoji: string) {
   if (emoji === '👊') await x.c.from('kudos').delete().eq('activity_id', activityId).eq('from_user', x.me).eq('kind', 'fist')
 }
 
-export async function sendNote(toUser: string, activityId: string | null, message: string) {
+export async function sendNote(toUser: string, activityId: string | null, message: string, gif: NoteGif | null = null) {
   const x = await ctx()
   if (!x) throw new Error('Sign in first')
-  const { data, error } = await x.c.from('kudos').insert({ to_user: toUser, activity_id: activityId, kind: 'note', message }).select('id').single()
+  const g = gif ? { url: gif.url, still: gif.still ?? null, w: gif.w, h: gif.h, title: gif.title ?? '' } : null
+  const { data, error } = await x.c
+    .from('kudos')
+    .insert({ to_user: toUser, activity_id: activityId, kind: 'note', message: message.trim() || null, gif: g })
+    .select('id')
+    .single()
   fail(error)
   void notifyKudos((data as { id: string }).id)
 }

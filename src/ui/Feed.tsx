@@ -12,6 +12,7 @@ import {
   subscribeSocial,
   weeklyLeaderboard,
   type Kudos,
+  type NoteGif,
   type PublicProfile,
   type SharedActivity,
   type SocialFeed,
@@ -26,6 +27,7 @@ import { Sheet } from './Sheet'
 import { formatClock, useNow } from './timer'
 import { EmojiPicker, groupReactions, ReactionBar } from './Reactions'
 import { NotificationsPrompt } from './Notifications'
+import { GifPicker, GifView } from './Gifs'
 
 /** Friends' data for the Feed, kept fresh by Supabase live updates. */
 function useSocial(session: Session | null) {
@@ -188,8 +190,8 @@ export function FeedView({
           to={feed.profiles[noteFor.user_id]}
           about={noteFor.title}
           onClose={() => setNoteFor(null)}
-          onSend={async (msg) => {
-            await sendNote(noteFor.user_id, noteFor.id, msg)
+          onSend={async (msg, gif) => {
+            await sendNote(noteFor.user_id, noteFor.id, msg, gif)
             setNoteFor(null)
             notify('Note sent')
             reload()
@@ -307,6 +309,7 @@ export function ForYou({ feed, notify = () => {} }: { feed: SocialFeed; notify?:
                   )}
                 </span>
                 {k.kind === 'note' && k.message && <span className="note-bubble">{k.message}</span>}
+                {k.kind === 'note' && k.gif && <GifView gif={k.gif} />}
                 <span className="tiny muted" style={{ display: 'block', marginTop: 4 }}>{ago(k.created_at)}</span>
               </span>
               {!k.seen_at && <span className="unseen-dot" aria-label="New" />}
@@ -524,33 +527,61 @@ function Highlights({ items }: { items: string[] }) {
 
 const QUICK_NOTES = ['Strong work 💪', "Let's go!", 'Proud of you', 'Beast mode']
 
-function NoteSheet({ to, about, onClose, onSend }: { to: PublicProfile | undefined; about: string; onClose: () => void; onSend: (m: string) => Promise<void> }) {
+function NoteSheet({
+  to,
+  about,
+  onClose,
+  onSend,
+}: {
+  to: PublicProfile | undefined
+  about: string
+  onClose: () => void
+  onSend: (m: string, gif: NoteGif | null) => Promise<void>
+}) {
   const [msg, setMsg] = useState('')
+  const [gif, setGif] = useState<NoteGif | null>(null)
+  const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState(false)
   const send = async (m: string) => {
-    if (!m.trim()) return
+    if (!m.trim() && !gif) return
     setBusy(true)
     try {
-      await onSend(m.trim())
+      await onSend(m.trim(), gif)
     } finally {
       setBusy(false)
     }
   }
   return (
-    <Sheet
-      title={`Note to ${to?.display_name.split(/\s+/)[0] || to?.username || 'your friend'}`}
-      onClose={onClose}
-      left={<button className="btn ghost" onClick={onClose}>Cancel</button>}
-      right={<button className="btn ghost" style={{ fontWeight: 600 }} disabled={busy || !msg.trim()} onClick={() => void send(msg)}>Send</button>}
-    >
-      <p className="small muted" style={{ margin: '0 4px 12px' }}>On {about}. Only they will see it.</p>
-      <textarea className="input" rows={3} maxLength={280} value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Write something encouraging" autoFocus />
-      <div className="row" style={{ flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-        {QUICK_NOTES.map((q) => (
-          <button key={q} className="chip" style={{ height: 32, padding: '0 12px', fontSize: 14 }} disabled={busy} onClick={() => void send(q)}>{q}</button>
-        ))}
-      </div>
-    </Sheet>
+    <>
+      <Sheet
+        title={`Note to ${to?.display_name.split(/\s+/)[0] || to?.username || 'your friend'}`}
+        onClose={onClose}
+        left={<button className="btn ghost" onClick={onClose}>Cancel</button>}
+        right={<button className="btn ghost" style={{ fontWeight: 600 }} disabled={busy || (!msg.trim() && !gif)} onClick={() => void send(msg)}>Send</button>}
+      >
+        <p className="small muted" style={{ margin: '0 4px 12px' }}>On {about}. Only they will see it.</p>
+        <textarea className="input" rows={3} maxLength={280} value={msg} onChange={(e) => setMsg(e.target.value)} placeholder={gif ? 'Add a message (optional)' : 'Write something encouraging'} autoFocus />
+        {gif && <GifView gif={gif} onRemove={() => setGif(null)} />}
+        <div className="row" style={{ flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          <button className="chip gif-btn" style={{ height: 32, padding: '0 12px' }} disabled={busy} onClick={() => setPicking(true)} aria-label={gif ? 'Change GIF' : 'Add a GIF'}>
+            {gif ? 'CHANGE GIF' : '+ GIF'}
+          </button>
+          {!gif &&
+            QUICK_NOTES.map((q) => (
+              <button key={q} className="chip" style={{ height: 32, padding: '0 12px', fontSize: 14 }} disabled={busy} onClick={() => void send(q)}>{q}</button>
+            ))}
+        </div>
+      </Sheet>
+      {picking && (
+        <GifPicker
+          onClose={() => setPicking(false)}
+          onPick={(g) => {
+            setGif(g)
+            setPicking(false)
+          }}
+        />
+      )}
+    </>
   )
 }
 

@@ -24,7 +24,7 @@ Status as of November 2026. Live app: https://nckzvth.github.io/kinetra/
 
 ### Still to do for Friends
 
-- **GIFs in notes:** needs a free GIPHY API key.
+- ~~**GIFs in notes**~~ — built: GIPHY search (key kept server-side), picker with attribution, GIFs in notes and "For you".
 
 ## Then: Teams and seasons
 
