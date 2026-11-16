@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { BrandMark } from './BrandMark'
 import { Icon } from './Icon'
 import { isBannerSnoozed, isPhoneOrTablet, snoozeBanner, useInstall, type InstallPlatform } from './install'
 
@@ -64,9 +65,7 @@ export function InstallContent({ compact, onDone }: { compact?: boolean; onDone?
   return (
     <>
       <div className="row" style={{ gap: 12, alignItems: 'center' }}>
-        <span className="app-glyph" style={{ width: 44, height: 44, borderRadius: 11, marginBottom: 0, flexShrink: 0 }}>
-          <Icon name="barbell" size={24} />
-        </span>
+        <BrandMark size={44} />
         <div className="grow">
           <div style={{ fontWeight: 600 }}>Add Kinetra to your home screen</div>
           <div className="small muted">Opens full screen, starts faster and works offline at the gym.</div>

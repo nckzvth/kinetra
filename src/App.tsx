@@ -21,6 +21,7 @@ import { InstallBanner } from './ui/InstallBanner'
 import { HistoryView, ProgressView, SessionResultView, useToast } from './ui/Views'
 import { ActiveWorkoutView } from './ui/Workout'
 import { YouView } from './ui/You'
+import { BrandMark } from './ui/BrandMark'
 
 type View = 'feed' | 'work' | 'log' | 'progress' | 'you'
 
@@ -353,7 +354,7 @@ export default function App() {
     <div className="shell">
       <nav className="rail" aria-label="Main">
         <div className="brand">
-          <span className="brand-mark"><Icon name="barbell" size={17} /></span>
+          <BrandMark size={30} />
           Kinetra
         </div>
         {NAV.map((n) => (

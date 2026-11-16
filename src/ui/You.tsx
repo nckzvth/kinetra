@@ -147,7 +147,7 @@ export function YouView({
         <NavCell icon="leaf" color="#30d158" label="Nutrition" value="Coming soon" current={wide && cur('nutrition')} onClick={() => setPage('nutrition')} />
         <NavCell icon={session ? 'cloud' : 'cloudOff'} color="#5e5ce6" label="Account and sync" value={session ? 'On' : 'Off'} current={wide && cur('account')} onClick={() => setPage('account')} />
         <NavCell icon="database" color="#636366" label="Backup and reset" current={wide && cur('data')} onClick={() => setPage('data')} />
-        <NavCell icon="arrowDown" color="#30d158" label="Add to Home Screen" value={isStandalone() ? 'Installed' : undefined} current={wide && cur('install')} onClick={() => setPage('install')} />
+        <NavCell icon="arrowDown" color="#2F6BFF" label="Add to Home Screen" value={isStandalone() ? 'Installed' : undefined} current={wide && cur('install')} onClick={() => setPage('install')} />
       </div>
     </>
   )

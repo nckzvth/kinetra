@@ -12,13 +12,16 @@
   --text: #000000;
   --text-2: rgba(60, 60, 67, 0.62);
   --text-3: rgba(60, 60, 67, 0.32);
-  --accent: #34c759;
+  /* Slipstream: electric blue flowing into cyan. */
+  --accent: #2f6bff;
   --accent-ink: #ffffff;
-  --accent-soft: rgba(52, 199, 89, 0.14);
-  --accent-text: #248a3d;
-  --tint: #007aff;
-  --info: #007aff;
-  --info-soft: rgba(0, 122, 255, 0.12);
+  --accent-soft: rgba(47, 107, 255, 0.12);
+  --accent-text: #1f4fd6;
+  --flow: linear-gradient(115deg, #2f5bff 0%, #3b8bff 55%, #22d3ee 100%);
+  --flow-soft: linear-gradient(115deg, rgba(47, 91, 255, 0.12), rgba(34, 211, 238, 0.12));
+  --tint: #2f6bff;
+  --info: #2f6bff;
+  --info-soft: rgba(47, 107, 255, 0.12);
   --warn: #ff9500;
   --warn-ink: #ffffff;
   --warn-soft: rgba(255, 149, 0, 0.14);
@@ -38,31 +41,33 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #000000;
-    --surface: #1c1c1e;
-    --surface-2: #2c2c2e;
-    --surface-3: #3a3a3c;
-    --line: rgba(84, 84, 88, 0.55);
-    --line-strong: rgba(84, 84, 88, 0.85);
+    /* Near-black with a hint of navy, so dark mode belongs to the brand. */
+    --bg: #05070d;
+    --surface: #131620;
+    --surface-2: #1d212e;
+    --surface-3: #2a2f3f;
+    --line: rgba(98, 108, 140, 0.4);
+    --line-strong: rgba(110, 120, 152, 0.62);
     --text: #ffffff;
     --text-2: rgba(235, 235, 245, 0.62);
     --text-3: rgba(235, 235, 245, 0.32);
-    --accent: #30d158;
-    --accent-ink: #00230a;
-    --accent-soft: rgba(48, 209, 88, 0.16);
-    --accent-text: #30d158;
-    --tint: #0a84ff;
-    --info: #0a84ff;
-    --info-soft: rgba(10, 132, 255, 0.18);
+    --accent: #3d7bff;
+    --accent-ink: #ffffff;
+    --accent-soft: rgba(61, 123, 255, 0.2);
+    --accent-text: #7aa7ff;
+    --flow-soft: linear-gradient(115deg, rgba(61, 123, 255, 0.2), rgba(34, 211, 238, 0.16));
+    --tint: #4c8bff;
+    --info: #4c8bff;
+    --info-soft: rgba(76, 139, 255, 0.2);
     --warn: #ff9f0a;
     --warn-ink: #2b1700;
     --warn-soft: rgba(255, 159, 10, 0.18);
     --warn-text: #ff9f0a;
     --danger: #ff453a;
     --danger-soft: rgba(255, 69, 58, 0.18);
-    --bar-bg: rgba(22, 22, 24, 0.82);
+    --bar-bg: rgba(12, 15, 24, 0.84);
     --scrim: rgba(0, 0, 0, 0.6);
-    --seg-on: #636366;
+    --seg-on: #3a4157;
     --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.6);
   }
 }
@@ -144,11 +149,6 @@ h1, h2, h3, h4, p { margin: 0; }
   overflow-y: auto;
 }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 10px 22px; font-weight: 700; font-size: 19px; }
-.brand-mark {
-  width: 30px; height: 30px; border-radius: 8px;
-  background: var(--accent); color: var(--accent-ink);
-  display: grid; place-items: center;
-}
 .rail-item {
   display: flex; align-items: center; gap: 12px;
   height: 40px; padding: 0 12px; border-radius: 10px;
@@ -192,7 +192,7 @@ h1, h2, h3, h4, p { margin: 0; }
   transition: transform 0.08s, opacity 0.12s;
 }
 .btn:active:not(:disabled) { transform: scale(0.98); opacity: 0.85; }
-.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn.primary { background: var(--flow); color: #fff; }
 .btn.ink { background: var(--text); color: var(--bg); }
 .btn.tint { background: var(--tint); color: #fff; }
 .btn.danger { color: var(--danger); }

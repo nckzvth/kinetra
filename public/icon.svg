@@ -1,7 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#0d0d0f"/>
-  <g stroke="#2fd27e" stroke-width="34" stroke-linecap="round">
-    <path d="M96 256h320"/>
-    <path d="M150 186v140M206 156v200M306 156v200M362 186v140"/>
+  <defs>
+    <linearGradient id="flow" gradientUnits="userSpaceOnUse" x1="92" y1="330" x2="420" y2="170">
+      <stop offset="0" stop-color="#2F5BFF"/>
+      <stop offset="0.55" stop-color="#3B8BFF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.3" cy="0.22" r="0.85">
+      <stop offset="0" stop-color="#16224A"/>
+      <stop offset="1" stop-color="#090C16"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+  <g transform="translate(0 0) scale(1)" fill="none" stroke="url(#flow)" stroke-linecap="round">
+    <path d="M222 204 C289 141 355 217 422 154" stroke-width="30"/>
+    <path d="M90 284 C203 221 315 297 428 234" stroke-width="42"/>
+    <path d="M162 362 C231 299 299 375 368 312" stroke-width="30" opacity="0.78"/>
   </g>
 </svg>

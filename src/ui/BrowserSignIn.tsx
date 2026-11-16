@@ -15,6 +15,7 @@ import {
   type PendingBrowserSignIn,
 } from '../data/sync'
 import { SignInForm } from './Account'
+import { BrandMark } from './BrandMark'
 import { Icon } from './Icon'
 import { canUseBrowserHandoff } from './install'
 import { Sheet } from './Sheet'
@@ -215,7 +216,7 @@ export function HandoffApprover({ session, notify }: { session: Session | null; 
   return (
     <Sheet onClose={close}>
       <div style={{ textAlign: 'center', padding: '10px 4px 0' }}>
-        <span className="app-glyph" style={{ width: 64, height: 64, borderRadius: 16, margin: '0 auto 14px' }}><Icon name="barbell" size={34} /></span>
+        <span style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}><BrandMark size={64} /></span>
         <h3 style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>Sign in to Kinetra on your Home Screen?</h3>
         <div className="account-chip">
           {avatar ? <img src={avatar} alt="" referrerPolicy="no-referrer" /> : <span className="avatar-fallback">{(fullName || session.user.email || '?').slice(0, 1).toUpperCase()}</span>}

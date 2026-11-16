@@ -10,6 +10,7 @@ import type { EquipmentPreset, UnitSystem } from '../domain/types'
 import { rulesFor } from '../domain/units'
 import { PROVIDER_NAME, ProviderMark, SignInForm } from './Account'
 import { fmtWeight, useMediaQuery } from './hooks'
+import { BrandMark } from './BrandMark'
 import { Icon, type IconName } from './Icon'
 import { Sheet, Stepper } from './Sheet'
 
@@ -83,7 +84,7 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
   const hero = (
     <>
       <div className="row" style={{ gap: 12, marginBottom: 10 }}>
-        <div className="app-glyph" style={{ marginBottom: 0 }}><Icon name="barbell" size={40} /></div>
+        <BrandMark size={64} />
         <span className="wordmark">Kinetra</span>
       </div>
       <h1 className="hero-title">Train with a plan that adapts.</h1>
