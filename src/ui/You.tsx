@@ -14,7 +14,7 @@ import { Icon, type IconName } from './Icon'
 import { Sheet, Stepper } from './Sheet'
 import { NutritionRoadmap } from './Views'
 
-type Page = 'home' | 'program' | 'day' | 'exercises' | 'equipment' | 'account' | 'data' | 'nutrition'
+type Page = 'home' | 'program' | 'day' | 'exercises' | 'equipment' | 'account' | 'data' | 'nutrition' | 'friends'
 
 export function YouView({
   profile,
@@ -93,6 +93,8 @@ export function YouView({
         return <>{back()}<DataPage notify={notify} /></>
       case 'nutrition':
         return <>{back()}<NutritionRoadmap profile={profile} /></>
+      case 'friends':
+        return <>{back()}<FriendsRoadmap /></>
       default:
         return null
     }
@@ -118,6 +120,7 @@ export function YouView({
       </div>
       <div className="group-header">More</div>
       <div className="card list">
+        <NavCell icon="user" color="#ff375f" label="Friends and teams" value="Coming next" current={wide && cur('friends')} onClick={() => setPage('friends')} />
         <NavCell icon="leaf" color="#30d158" label="Nutrition" value="Coming soon" current={wide && cur('nutrition')} onClick={() => setPage('nutrition')} />
         <NavCell icon={session ? 'cloud' : 'cloudOff'} color="#5e5ce6" label="Account and sync" value={session ? 'On' : 'Off'} current={wide && cur('account')} onClick={() => setPage('account')} />
         <NavCell icon="database" color="#636366" label="Backup and reset" current={wide && cur('data')} onClick={() => setPage('data')} />
@@ -777,3 +780,32 @@ function DataPage({ notify }: { notify: (m: string) => void }) {
   )
 }
 
+
+const FRIEND_FEATURES: [string, string][] = [
+  ['Training together', 'See when friends are working out, live, right on Today.'],
+  ['A feed of real effort', 'Finished workouts, new personal bests, runs, rounds and climbs.'],
+  ['Encouragement', 'One-tap fist-bumps, short notes and GIFs, mid-set or after.'],
+  ['Weekly high scores', 'Sessions, volume, streaks and personal records among friends.'],
+  ['Teams and seasons', 'Form a team, take on other teams over a season. Works for friend groups and workplaces.'],
+  ['You control sharing', 'Friends see summaries only. Choose whether they see your weights.'],
+]
+
+function FriendsRoadmap() {
+  return (
+    <>
+      <span className="chip info">Coming next</span>
+      <h1 className="page-title" style={{ marginTop: 8 }}>Friends and teams</h1>
+      <p className="muted" style={{ margin: '8px 4px 0' }}>Train with the people who keep you showing up.</p>
+      <div className="card list" style={{ marginTop: 18 }}>
+        {FRIEND_FEATURES.map(([t, d]) => (
+          <div key={t} className="cell" style={{ alignItems: 'flex-start' }}>
+            <span className="grow">
+              <span style={{ display: 'block', fontWeight: 600 }}>{t}</span>
+              <span className="small muted">{d}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}

@@ -61,7 +61,7 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
   const finish = async () => {
     setBusy(true)
     await completeOnboarding({
-      name: '',
+      name: fullName,
       choice: effectiveChoice,
       preset,
       unit,
@@ -69,7 +69,7 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
     })
   }
 
-  const next = () => (step >= lastStep ? void finish() : setStep(step + 1))
+  const next = () => (current >= lastStep ? void finish() : setStep(current + 1))
 
   const hero = (
     <>
@@ -98,56 +98,27 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
     )
 
   const email = session?.user.email ?? null
-  const signedInBlock = (
-    <>
-      <h1>You're signed in</h1>
-      <p className="lede">
-        {email} is connected. Your cloud backup doesn't have a training setup yet, so let's create one. Three quick questions.
-      </p>
-    </>
-  )
+  const meta = (session?.user.user_metadata ?? {}) as { full_name?: string; name?: string; avatar_url?: string; picture?: string }
+  const fullName = (meta.full_name ?? meta.name ?? '').trim()
+  const firstName = fullName.split(/\s+/)[0] ?? ''
+  const avatar = meta.avatar_url ?? meta.picture ?? null
 
   if (restoring) {
     return shell(
       <div className="ob">
         <div className="ob-body ob-center" style={{ alignItems: 'center', textAlign: 'center', justifyContent: 'center', display: 'flex', flex: 1 }}>
           <div className="spinner" aria-hidden="true" />
-          <h1 style={{ fontSize: 24, marginTop: 18 }}>Restoring your training…</h1>
-          {email && <p className="lede" style={{ marginTop: 6 }}>Signed in as {email}</p>}
+          <h1 style={{ fontSize: 24, marginTop: 18 }}>{firstName ? `Welcome back, ${firstName}` : 'Signing you in'}</h1>
+          <p className="lede" style={{ marginTop: 6 }}>Getting your training ready…</p>
         </div>
       </div>,
     )
   }
 
-  if (step === 0) {
-    if (wide && session)
-      return shell(
-        <div className="ob">
-          <div className="ob-body ob-center">
-            {signedInBlock}
-            <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-              <button className="btn tint lg" style={{ minWidth: 200 }} onClick={() => setStep(1)}>Set up training</button>
-              <button className="btn lg" style={{ background: 'var(--surface)' }} onClick={() => void signOut()}>Use a different account</button>
-            </div>
-          </div>
-        </div>,
-      )
-    if (!wide && session)
-      return (
-        <div className="ob">
-          <div className="welcome-hero">
-            {hero}
-            <div className="card card-pad" style={{ marginTop: 18 }}>
-              <div style={{ fontWeight: 600 }}>Signed in as {email}</div>
-              <div className="small muted" style={{ marginTop: 2 }}>Your cloud backup doesn't have a training setup yet. Let's create one.</div>
-            </div>
-          </div>
-          <div className="ob-foot stack" style={{ gap: 6 }}>
-            <button className="btn tint lg block" onClick={() => setStep(1)}>Set up training</button>
-            <button className="btn ghost block" onClick={() => void signOut()}>Use a different account</button>
-          </div>
-        </div>
-      )
+  // Signed-in users have already chosen to be here: skip the pitch and start at question one.
+  const current = session && step === 0 ? 1 : step
+
+  if (current === 0) {
     if (wide)
       return shell(
         <div className="ob">
@@ -194,18 +165,23 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
   return shell(
     <div className="ob" onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'BUTTON' && !busy && next()}>
       <div className="ob-top">
-        <button className="back-btn" onClick={() => setStep(step - 1)} aria-label="Back">
-          <Icon name="chevronLeft" size={24} /> Back
-        </button>
-        <div className="ob-dots" aria-label={`Step ${step} of ${lastStep}`}>
-          {Array.from({ length: lastStep }, (_, i) => <span key={i} className={i + 1 === step ? 'on' : ''} />)}
+        {session && current === 1 ? (
+          <span style={{ width: 80 }} />
+        ) : (
+          <button className="back-btn" onClick={() => setStep(current - 1)} aria-label="Back">
+            <Icon name="chevronLeft" size={24} /> Back
+          </button>
+        )}
+        <div className="ob-dots" aria-label={`Step ${current} of ${lastStep}`}>
+          {Array.from({ length: lastStep }, (_, i) => <span key={i} className={i + 1 === current ? 'on' : ''} />)}
         </div>
-        <span style={{ width: 64 }} />
+        {session ? <AccountBadge name={firstName} email={email} avatar={avatar} /> : <span style={{ width: 80 }} />}
       </div>
 
       <div className="ob-body">
-        {step === 1 && (
+        {current === 1 && (
           <>
+            {session && <p className="eyebrow" style={{ fontSize: 15, marginBottom: 6 }}>{firstName ? `Welcome, ${firstName}` : 'Welcome'}</p>}
             <h1>What do you want to do?</h1>
             <p className="lede">Pick a starting point. You can edit every day and exercise later.</p>
             {PROGRAMS.map((p) => {
@@ -228,7 +204,7 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
           </>
         )}
 
-        {step === 2 && (
+        {current === 2 && (
           <>
             <h1>Where do you train?</h1>
             <p className="lede">This sets your bar, plates and weight jumps, so the app can do the math.</p>
@@ -251,7 +227,7 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
           </>
         )}
 
-        {step === 3 && (
+        {current === 3 && (
           <>
             <h1>Starting weights</h1>
             <p className="lede">
@@ -283,9 +259,29 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
 
       <div className="ob-foot">
         <button className="btn tint lg block" disabled={busy} onClick={next}>
-          {step >= lastStep ? (choice.kind === 'track' ? 'Start tracking' : 'Start training') : 'Continue'}
+          {current >= lastStep ? (choice.kind === 'track' ? 'Start tracking' : 'Start training') : 'Continue'}
         </button>
       </div>
     </div>,
+  )
+}
+
+/** Avatar + first name, with a menu to switch accounts. */
+function AccountBadge({ name, email, avatar }: { name: string; email: string | null; avatar: string | null }) {
+  const [open, setOpen] = useState(false)
+  const initials = (name || email || '?').slice(0, 1).toUpperCase()
+  return (
+    <div style={{ position: 'relative' }}>
+      <button className="account-badge" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={`Signed in as ${email ?? name}`}>
+        {avatar ? <img src={avatar} alt="" referrerPolicy="no-referrer" /> : <span className="avatar-fallback">{initials}</span>}
+        <span className="account-badge-name">{name || 'Account'}</span>
+      </button>
+      {open && (
+        <div className="popover" role="menu">
+          <div className="small muted" style={{ padding: '10px 14px 6px' }}>Signed in as<br /><span style={{ color: 'var(--text)' }}>{email}</span></div>
+          <button className="cell" role="menuitem" style={{ color: 'var(--tint)' }} onClick={() => void signOut()}>Use a different account</button>
+        </div>
+      )}
+    </div>
   )
 }

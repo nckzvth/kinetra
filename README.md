@@ -5,13 +5,7 @@ works offline, with optional Supabase sync. Programs are data: pick a template, 
 
 ## Status
 
-| Release | Scope | State |
-| --- | --- | --- |
-| 1 | Lifting engine, phase gates, tap-to-log workouts, warm-ups, plate calculator, rest timer, history, progress, Supabase sync | **Built** |
-| 1.5 | Redesign: 3-step setup, editable programs (templates, build your own, just track), custom exercises, kg support, iOS-style UI | **Built** · live at https://nckzvth.github.io/kinetra/ |
-| 2 | Log activity: distance/pace, rounds and bell timer, climbing, timed holds, bodyweight | **Built** |
-| 3 | Nutrition: macro ledger, training-day scaling, recipe batches, fridge servings, food search | Schema and sync ready; UI next |
-| 4 | Analytics, quick-log command bar, CSV export, accessibility pass, sync tests | Planned |
+Lifting, editable programs, activity logging, accounts and sync are built. Next up is Friends, then Teams and seasons, then Nutrition. The full plan is in [ROADMAP.md](ROADMAP.md).
 
 Deploys: every push to `main` runs tests and publishes to GitHub Pages (`.github/workflows/deploy.yml`).
 Supabase project ref: `blcznhzmiamnpmxrboue` (us-east-1).
