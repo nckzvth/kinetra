@@ -518,3 +518,12 @@ button.stream-row:active { background: var(--surface-2); }
 .install-steps { margin: 14px 0 0; padding: 0 0 0 22px; display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.45; }
 .install-steps li::marker { color: var(--text-2); font-weight: 600; }
 .install-banner .icon-btn { color: var(--text-3); }
+
+/* ─── Browser handoff ──────────────────────────────────────────────────── */
+.handoff-steps { list-style: none; padding: 0; margin: 18px 0 10px; display: flex; flex-direction: column; gap: 12px; }
+.handoff-steps li { display: flex; gap: 12px; align-items: flex-start; line-height: 1.4; }
+.handoff-steps .n { width: 26px; height: 26px; border-radius: 50%; background: var(--info-soft); color: var(--tint); display: grid; place-items: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+.account-chip { display: inline-flex; align-items: center; gap: 10px; margin: 14px auto 22px; padding: 8px 14px 8px 8px; border-radius: 999px; background: var(--surface); max-width: 100%; }
+.account-chip img, .account-chip .avatar-fallback { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.account-chip .avatar-fallback { display: grid; place-items: center; background: var(--tint); color: #fff; font-weight: 700; }
+.success-badge { width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: inline-grid; place-items: center; }

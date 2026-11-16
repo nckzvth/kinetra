@@ -49,11 +49,25 @@ export function detectPlatform(): InstallPlatform {
   const ua = navigator.userAgent
   const iPadOS = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1
   const ios = /iPhone|iPad|iPod/.test(ua) || iPadOS
-  const inApp = /FBAN|FBAV|Instagram|Line\/|GSA\/|LinkedInApp|Snapchat|Twitter|TikTok/.test(ua) || (ios && !/Safari\//.test(ua))
+  // Home-screen apps also omit "Safari/" from the user agent, so only treat that as in-app when not installed.
+  const inApp = /FBAN|FBAV|Instagram|Line\/|GSA\/|LinkedInApp|Snapchat|Twitter|TikTok/.test(ua) || (ios && !/Safari\//.test(ua) && !isStandalone())
   if (inApp) return 'in-app'
   if (ios) return /CriOS|FxiOS|EdgiOS/.test(ua) ? 'ios-other-browser' : 'ios'
   if (/Android/.test(ua)) return 'android'
   return deferred ? 'desktop' : 'unsupported'
+}
+
+/** iOS major version, or null when not on iOS. */
+export function iosVersion(): number | null {
+  const m = navigator.userAgent.match(/OS (\d+)_\d+(?:_\d+)? like Mac OS X/)
+  if (m) return Number(m[1])
+  return detectPlatform() === 'ios' ? 17 : null // iPadOS reports a Mac user agent; assume current
+}
+
+/** "Sign in with your browser" only helps (and only works) in the iPhone/iPad home-screen app on iOS 17+. */
+export function canUseBrowserHandoff(): boolean {
+  const v = iosVersion()
+  return isStandalone() && v !== null && v >= 17
 }
 
 export const isPhoneOrTablet = () => {

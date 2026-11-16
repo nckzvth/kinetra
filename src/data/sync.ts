@@ -309,34 +309,67 @@ function randomHex(bytes = 32): string {
   return [...a].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+export type HandoffBrowser = 'safari' | 'chrome' | 'firefox' | 'edge'
+
+export const HANDOFF_BROWSERS: { id: HandoffBrowser; name: string }[] = [
+  { id: 'safari', name: 'Safari' },
+  { id: 'chrome', name: 'Chrome' },
+  { id: 'firefox', name: 'Firefox' },
+  { id: 'edge', name: 'Edge' },
+]
+
+/**
+ * iPhone home-screen apps open normal links in a private in-app browser with empty storage.
+ * These app-specific links hand the page to the real browser app, where the user's
+ * Kinetra and Google sign-ins already live. `x-safari-https` needs iOS 17 or later.
+ */
+function browserUrl(browser: HandoffBrowser, https: string): string {
+  const bare = https.replace(/^https:\/\//, '')
+  switch (browser) {
+    case 'safari':
+      return `x-safari-${https}`
+    case 'chrome':
+      return `googlechromes://${bare}`
+    case 'firefox':
+      return `firefox://open-url?url=${encodeURIComponent(https)}`
+    case 'edge':
+      return `microsoft-edge-${https}`
+  }
+}
+
 /** Home-screen app: registers a one-time request and opens the browser to approve it. */
-export async function startBrowserSignIn(): Promise<string> {
+export async function startBrowserSignIn(browser: HandoffBrowser = 'safari'): Promise<string> {
   const c = await getClient()
   if (!c) throw new Error('Supabase is not configured')
   const id = randomHex()
   const { error } = await c.rpc('create_auth_handoff', { p_id: id })
   if (error) throw error
   try {
-    localStorage.setItem(BROWSER_SIGNIN_KEY, JSON.stringify({ id, at: Date.now() }))
+    localStorage.setItem(BROWSER_SIGNIN_KEY, JSON.stringify({ id, at: Date.now(), browser }))
   } catch {
     /* ignore */
   }
-  openBrowserForHandoff(id)
+  openBrowserForHandoff(id, browser)
   return id
 }
 
-export function openBrowserForHandoff(id: string) {
+export function openBrowserForHandoff(id: string, browser: HandoffBrowser) {
   const url = new URL(import.meta.env.BASE_URL, location.origin)
   url.searchParams.set(HANDOFF_PARAM, id)
-  // From an installed app, a new window opens in the phone's browser rather than inside the app.
-  window.open(url.href, '_blank', 'noopener')
+  location.href = browserUrl(browser, url.href)
+}
+
+export interface PendingBrowserSignIn {
+  id: string
+  browser: HandoffBrowser
+  at: number
 }
 
 /** The in-progress request on this device, if one was started in the last 10 minutes. */
-export function currentBrowserSignIn(): string | null {
+export function currentBrowserSignIn(): PendingBrowserSignIn | null {
   try {
-    const v = JSON.parse(localStorage.getItem(BROWSER_SIGNIN_KEY) ?? 'null') as { id: string; at: number } | null
-    if (v && Date.now() - v.at < 10 * 60 * 1000) return v.id
+    const v = JSON.parse(localStorage.getItem(BROWSER_SIGNIN_KEY) ?? 'null') as PendingBrowserSignIn | null
+    if (v && Date.now() - v.at < 10 * 60 * 1000) return { ...v, browser: v.browser ?? 'safari' }
   } catch {
     /* ignore */
   }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { completeOnboarding, programForChoice, type ProgramChoice } from '../data/repo'
 import { enabledProviders, isSyncConfigured, signInWithProvider, signOut, type SocialProvider } from '../data/sync'
-import { isStandalone, detectPlatform } from './install'
+import { canUseBrowserHandoff, isStandalone, detectPlatform } from './install'
 import { InstallSteps } from './InstallBanner'
 import { BrowserSignInButton } from './BrowserSignIn'
 import type { Session } from '@supabase/supabase-js'
@@ -130,12 +130,10 @@ export function Onboarding({ notify, session, restoring }: { notify: (m: string)
     const iphoneSafari = (platform === 'ios' || platform === 'ios-other-browser') && !isStandalone()
     const actions = (
       <div className="stack" style={{ gap: 10, width: '100%', maxWidth: wide ? 380 : undefined }}>
-        {isStandalone() && isSyncConfigured() && (
+        {canUseBrowserHandoff() && isSyncConfigured() && (
           <>
             <BrowserSignInButton notify={notify} />
-            <p className="tiny muted" style={{ textAlign: 'center', margin: '-2px 8px 4px' }}>
-              Uses the account you're already signed into in your browser. No passwords to type.
-            </p>
+            <div className="or-divider" style={{ margin: '6px 0 2px' }}><span>or sign in here</span></div>
           </>
         )}
         {providers.map((p) => (

@@ -2,7 +2,7 @@ import type { Session } from '@supabase/supabase-js'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
 import { BrowserSignInButton } from './BrowserSignIn'
-import { isStandalone } from './install'
+import { canUseBrowserHandoff } from './install'
 import { getMeta } from '../data/db'
 import { enabledProviders, pendingChanges, sendLoginEmail, signInWithPassword, signInWithProvider, signOut, signUpWithPassword, type SocialProvider } from '../data/sync'
 
@@ -36,7 +36,7 @@ export function SignInForm({ notify, onDone, showProviders = true }: { notify: (
   }, [])
   return (
     <div className="stack" style={{ gap: 12 }}>
-      {showProviders && isStandalone() && (
+      {showProviders && canUseBrowserHandoff() && (
         <>
           <BrowserSignInButton notify={notify} />
           <div className="or-divider"><span>or sign in here</span></div>
