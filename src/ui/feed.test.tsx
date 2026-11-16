@@ -17,8 +17,8 @@ const feed: SocialFeed = {
     { id: 'a2', user_id: 'sam', kind: 'activity', title: 'Outdoor Run', started_at: iso(4), duration_seconds: 1800, summary: {} },
     { id: 'a3', user_id: 'me', kind: 'lift', title: 'Legs A', started_at: iso(2), duration_seconds: 3000, summary: { ups: 2 } },
   ],
-  kudos: [{ id: 'k1', from_user: 'sam', to_user: 'nick', activity_id: 'a1', kind: 'fist', message: null, created_at: iso(30), seen_at: null }],
-  inbox: [{ id: 'k2', from_user: 'nick', to_user: 'me', activity_id: 'a3', kind: 'note', message: 'Strong work 💪', created_at: iso(5), seen_at: null }],
+  kudos: [{ id: 'k1', from_user: 'sam', to_user: 'nick', activity_id: 'a1', kind: 'react', emoji: '🔥', message: null, created_at: iso(30), seen_at: null }],
+  inbox: [{ id: 'k2', from_user: 'nick', to_user: 'me', activity_id: 'a3', kind: 'note', emoji: null, message: 'Strong work 💪', created_at: iso(5), seen_at: null }],
 }
 
 describe('friends feed components', () => {
@@ -28,6 +28,7 @@ describe('friends feed components', () => {
     expect(html).toContain('Nick')
     expect(html).toContain('Pull A · 18 min')
     expect(html).toContain('👊')
+    expect(html).toContain('Choose an emoji')
   })
 
   it('shows notes received in For you', () => {
@@ -45,7 +46,8 @@ describe('friends feed components', () => {
     expect(html).toContain('finished')
     expect(html).toContain('Bench Press up to 135 lb')
     expect(html).toContain('5 · 5 · 5')
-    expect(html).toMatch(/👊\s*1/)
+    expect(html).toMatch(/🔥<\/span>1/)
+    expect(html).toContain('Add a reaction')
   })
 
   it('ranks the week: sessions first, then minutes and increases', () => {

@@ -104,9 +104,9 @@ export function ActivityView({ onSaved }: { onSaved: (id: string) => void }) {
         const items = EXERCISES.filter((e) => e.tracking_archetype === a.arch)
         return (
           <div key={a.arch}>
-            <div className="section-title">
+            <div className="section-title" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
               <h2>{a.label}</h2>
-              <span className="tiny faint">{a.blurb}</span>
+              <span className="small muted">{a.blurb}</span>
             </div>
             <div className="tile-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
               {items.map((ex) => (

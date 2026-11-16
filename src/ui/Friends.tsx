@@ -3,6 +3,10 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   acceptFriend,
   addFriend,
+  blockUser,
+  listBlocked,
+  reportUser,
+  unblockUser,
   clearPendingInvite,
   consumeInviteParam,
   profileByUsername,
@@ -22,6 +26,7 @@ import {
 import { SignInForm } from './Account'
 import { Icon } from './Icon'
 import { Sheet } from './Sheet'
+import { NotificationsRow } from './Notifications'
 
 export function Avatar({ p, size = 40 }: { p: Pick<PublicProfile, 'display_name' | 'username' | 'avatar_url'> | null; size?: number }) {
   const initial = (p?.display_name || p?.username || '?').slice(0, 1).toUpperCase()
@@ -44,13 +49,16 @@ export function FriendsPage({ session, notify }: { session: Session | null; noti
   const [editing, setEditing] = useState(false)
   const [removing, setRemoving] = useState<FriendEntry | null>(null)
   const [loadError, setLoadError] = useState(false)
+  const [blocked, setBlocked] = useState<PublicProfile[]>([])
+  const [reporting, setReporting] = useState<PublicProfile | null>(null)
 
   const reload = useCallback(async () => {
     if (!session) return
     try {
-      const [p, f] = await Promise.all([getMyProfile(), listFriends()])
+      const [p, f, b] = await Promise.all([getMyProfile(), listFriends(), listBlocked()])
       setProfile(p)
       setEntries(f.entries)
+      setBlocked(b)
       setLoadError(false)
     } catch {
       setLoadError(true)
@@ -174,17 +182,42 @@ export function FriendsPage({ session, notify }: { session: Session | null; noti
         </>
       )}
 
+      <NotificationsRow notify={notify} />
+
       <PrivacyCard profile={profile} onChanged={() => void reload()} />
 
-      {removing && (
-        <Sheet title={removing.profile.display_name || `@${removing.profile.username}`} onClose={() => setRemoving(null)}>
-          <p className="muted" style={{ textAlign: 'center', margin: '0 8px 18px' }}>You'll stop seeing each other's workouts. You can add them again any time.</p>
-          <div className="stack" style={{ gap: 8 }}>
-            <button className="btn block" style={{ color: 'var(--danger)', background: 'var(--surface)' }} onClick={async () => { await removeFriendship(removing.friendship.id); setRemoving(null); void reload() }}>Remove friend</button>
-            <button className="btn block" style={{ background: 'var(--surface)' }} onClick={() => setRemoving(null)}>Cancel</button>
+      {blocked.length > 0 && (
+        <>
+          <div className="group-header">Blocked</div>
+          <div className="card list">
+            {blocked.map((p) => (
+              <div key={p.user_id} className="cell">
+                <Avatar p={p} size={32} />
+                <span className="grow small">@{p.username}</span>
+                <button className="btn sm ghost" onClick={async () => { await unblockUser(p.user_id); void reload() }}>Unblock</button>
+              </div>
+            ))}
           </div>
+        </>
+      )}
+
+      {removing && (
+        <Sheet title={removing.profile.display_name || `@${removing.profile.username}`} onClose={() => setRemoving(null)} right={<button className="btn ghost" onClick={() => setRemoving(null)}>Done</button>}>
+          <div className="card list">
+            <button className="cell" onClick={async () => { await removeFriendship(removing.friendship.id); setRemoving(null); notify('Friend removed'); void reload() }}>
+              <Icon name="x" /> <span className="grow">Remove friend</span>
+            </button>
+            <button className="cell" style={{ color: 'var(--danger)' }} onClick={async () => { await blockUser(removing.profile.user_id); setRemoving(null); notify(`Blocked @${removing.profile.username}`); void reload() }}>
+              <Icon name="ban" /> <span className="grow">Block</span>
+            </button>
+            <button className="cell" style={{ color: 'var(--danger)' }} onClick={() => { setReporting(removing.profile); setRemoving(null) }}>
+              <Icon name="flag" /> <span className="grow">Report</span>
+            </button>
+          </div>
+          <p className="group-footer">Removing stops you seeing each other's training. Blocking also stops friend requests and reactions both ways; they aren't told.</p>
         </Sheet>
       )}
+      {reporting && <ReportSheet who={reporting} onClose={() => setReporting(null)} notify={notify} />}
     </>
   )
 }
@@ -457,6 +490,61 @@ export function InviteHandler({ session, notify }: { session: Session | null; no
         </button>
         <button className="btn ghost block" onClick={close}>Not now</button>
       </div>
+    </Sheet>
+  )
+}
+
+const REASONS = ['Harassment or bullying', 'Spam', 'Inappropriate content', 'Pretending to be someone else', 'Something else']
+
+/** Report a person (optionally a specific note). Offers to block them too. */
+export function ReportSheet({ who, kudosId, onClose, notify }: { who: PublicProfile; kudosId?: string; onClose: () => void; notify: (m: string) => void }) {
+  const [reason, setReason] = useState<string | null>(null)
+  const [detail, setDetail] = useState('')
+  const [alsoBlock, setAlsoBlock] = useState(true)
+  const [busy, setBusy] = useState(false)
+  return (
+    <Sheet
+      title={`Report @${who.username}`}
+      onClose={onClose}
+      left={<button className="btn ghost" onClick={onClose}>Cancel</button>}
+      right={
+        <button
+          className="btn ghost"
+          style={{ fontWeight: 600 }}
+          disabled={!reason || busy}
+          onClick={async () => {
+            setBusy(true)
+            try {
+              await reportUser(who.user_id, detail.trim() ? `${reason}: ${detail.trim()}` : reason!, kudosId)
+              if (alsoBlock) await blockUser(who.user_id)
+              notify(alsoBlock ? 'Reported and blocked. Thank you.' : 'Reported. Thank you.')
+              onClose()
+            } catch (e) {
+              notify(e instanceof Error ? e.message : "Couldn't send report")
+              setBusy(false)
+            }
+          }}
+        >
+          Send
+        </button>
+      }
+    >
+      <div className="card list">
+        {REASONS.map((r) => (
+          <button key={r} className="cell" onClick={() => setReason(r)} aria-pressed={reason === r}>
+            <span className="grow">{r}</span>
+            {reason === r && <Icon name="check" className="link" />}
+          </button>
+        ))}
+      </div>
+      <textarea className="input" style={{ marginTop: 12 }} rows={2} maxLength={400} placeholder="Add details (optional)" value={detail} onChange={(e) => setDetail(e.target.value)} />
+      <div className="card" style={{ marginTop: 12 }}>
+        <div className="cell">
+          <span className="grow">Also block @{who.username}</span>
+          <button className="switch" role="switch" aria-checked={alsoBlock} aria-label="Also block" onClick={() => setAlsoBlock((b) => !b)} />
+        </div>
+      </div>
+      <p className="group-footer">Reports are private. They aren't told who reported them.</p>
     </Sheet>
   )
 }

@@ -54,7 +54,9 @@ export interface Kudos {
   from_user: string
   to_user: string
   activity_id: string | null
-  kind: 'fist' | 'note'
+  kind: 'fist' | 'note' | 'react'
+  /** For reactions (legacy 'fist' rows count as 👊). */
+  emoji: string | null
   message: string | null
   created_at: string
   seen_at: string | null
@@ -173,9 +175,10 @@ export async function addFriend(userId: string): Promise<'requested' | 'accepted
     await acceptFriend((theirs as Friendship).id)
     return 'accepted'
   }
-  const { error } = await x.c.from('friendships').insert({ requester: x.me, addressee: userId })
+  const { data, error } = await x.c.from('friendships').insert({ requester: x.me, addressee: userId }).select('id').single()
   if (error?.code === '23505') return 'requested'
   fail(error)
+  void notifyFriendRequest((data as { id: string }).id)
   return 'requested'
 }
 
@@ -184,6 +187,7 @@ export async function acceptFriend(id: string) {
   if (!x) return
   const { error } = await x.c.from('friendships').update({ status: 'accepted' }).eq('id', id)
   fail(error)
+  void notifyFriendRequest(id)
 }
 
 export async function removeFriendship(id: string) {
@@ -311,17 +315,43 @@ export async function loadFeed(): Promise<SocialFeed | null> {
   return { me: x.me, profiles, live: (live.data ?? []) as LiveSession[], activities, kudos, inbox: inboxRows, friendIds }
 }
 
-export async function sendKudos(toUser: string, activityId: string | null, kind: 'fist' | 'note', message?: string) {
+export const emojiOf = (k: Kudos) => (k.kind === 'fist' ? '👊' : k.emoji ?? '👊')
+export const isReaction = (k: Kudos) => k.kind === 'fist' || k.kind === 'react'
+
+/** React to a post (or to someone training now, with activityId null) with any emoji. */
+export async function sendReaction(toUser: string, activityId: string | null, emoji: string) {
   const x = await ctx()
   if (!x) throw new Error('Sign in first')
-  const { error } = await x.c.from('kudos').insert({ to_user: toUser, activity_id: activityId, kind, message: message ?? null })
+  const { data, error } = await x.c.from('kudos').insert({ to_user: toUser, activity_id: activityId, kind: 'react', emoji }).select('id').single()
+  if (error?.code === '23505') return
   fail(error)
+  void notifyKudos((data as { id: string }).id)
 }
 
-export async function unsendFist(activityId: string) {
+export async function removeReaction(activityId: string, emoji: string) {
   const x = await ctx()
   if (!x) return
-  await x.c.from('kudos').delete().eq('activity_id', activityId).eq('from_user', x.me).eq('kind', 'fist')
+  await x.c.from('kudos').delete().eq('activity_id', activityId).eq('from_user', x.me).eq('kind', 'react').eq('emoji', emoji)
+  if (emoji === '👊') await x.c.from('kudos').delete().eq('activity_id', activityId).eq('from_user', x.me).eq('kind', 'fist')
+}
+
+export async function sendNote(toUser: string, activityId: string | null, message: string) {
+  const x = await ctx()
+  if (!x) throw new Error('Sign in first')
+  const { data, error } = await x.c.from('kudos').insert({ to_user: toUser, activity_id: activityId, kind: 'note', message }).select('id').single()
+  fail(error)
+  void notifyKudos((data as { id: string }).id)
+}
+
+/** Asks the server to push a notification about this reaction or note to its recipient. */
+export async function notifyKudos(kudosId: string) {
+  const c = await getClient()
+  await c?.functions.invoke('push-notify', { body: { kind: 'kudos', id: kudosId } }).catch(() => {})
+}
+
+export async function notifyFriendRequest(friendshipId: string) {
+  const c = await getClient()
+  await c?.functions.invoke('push-notify', { body: { kind: 'friendship', id: friendshipId } }).catch(() => {})
 }
 
 export async function markInboxSeen() {
@@ -368,4 +398,36 @@ export function weeklyLeaderboard(feed: SocialFeed): LeaderRow[] {
   // Score rewards showing up first, then effort and progress, so beginners can top the board too.
   for (const r of rows.values()) r.score = r.sessions * 10 + Math.min(r.minutes, 600) / 6 + r.ups * 5
   return [...rows.values()].sort((a, b) => b.score - a.score || b.sessions - a.sessions)
+}
+
+// ─── Block and report ───────────────────────────────────────────────────────
+
+/** Blocks someone: removes any friendship and stops requests and reactions in both directions. */
+export async function blockUser(userId: string) {
+  const x = await ctx()
+  if (!x) throw new Error('Sign in first')
+  const { error } = await x.c.from('blocks').upsert({ blocker: x.me, blocked: userId })
+  fail(error)
+  await x.c.from('friendships').delete().or(`and(requester.eq.${x.me},addressee.eq.${userId}),and(requester.eq.${userId},addressee.eq.${x.me})`)
+}
+
+export async function unblockUser(userId: string) {
+  const x = await ctx()
+  if (!x) return
+  await x.c.from('blocks').delete().eq('blocker', x.me).eq('blocked', userId)
+}
+
+export async function listBlocked(): Promise<PublicProfile[]> {
+  const x = await ctx()
+  if (!x) return []
+  const { data } = await x.c.from('blocks').select('blocked').eq('blocker', x.me)
+  const ids = ((data ?? []) as { blocked: string }[]).map((b) => b.blocked)
+  return Object.values(await profilesById(x.c, ids))
+}
+
+export async function reportUser(userId: string, reason: string, kudosId?: string) {
+  const x = await ctx()
+  if (!x) throw new Error('Sign in first')
+  const { error } = await x.c.from('reports').insert({ reporter: x.me, reported_user: userId, reason, kudos_id: kudosId ?? null })
+  fail(error)
 }

@@ -14,17 +14,17 @@ Status as of November 2026. Live app: https://nckzvth.github.io/kinetra/
 
 - **Profiles:** @username, name and photo, with privacy switches for sharing workouts and showing weights (You → Friends).
 - **Adding friends:** search by name or @username, or share an invite link (`?invite=username`). Requests are accepted or declined; nothing is shared until both agree.
-- **Training now:** a live strip at the top of Feed, with a one-tap fist-bump.
+- **Training now:** a live strip at the top of Feed; cheer friends on with any emoji.
 - **Feed:** friends' finished workouts and activities alongside yours, with highlights and (if shared) weights.
-- **Encouragement:** fist-bumps and short private notes, with a "For you" section for what you've received.
+- **Encouragement:** reactions with any emoji (grouped like tapbacks) and short private notes, with a "For you" section for what you've received.
+- **Notifications:** web push for reactions, notes and friend requests (iPhone: home-screen app on iOS 16.4+).
+- **Safety:** block (stops requests and reactions both ways) and report (with optional block); reports land in the `reports` table.
 - **This week:** a leaderboard among friends (10 points per session, 1 per 6 active minutes up to 100, 5 per weight increase; resets Monday).
 - **Privacy:** enforced by row-level security; verified that strangers see nothing and that nothing is visible before a request is accepted.
 
 ### Still to do for Friends
 
-- **GIFs:** needs a free Giphy (or similar) API key.
-- **Push notifications** for taps and notes: needs VAPID keys and a Supabase edge function; on iPhone only for home-screen apps.
-- **Blocking and reporting** before opening to people beyond friend groups.
+- **GIFs in notes:** needs a free GIPHY API key.
 
 ## Then: Teams and seasons
 

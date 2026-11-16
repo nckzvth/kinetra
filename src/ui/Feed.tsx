@@ -4,9 +4,12 @@ import type { ActiveWorkout } from '../data/db'
 import {
   loadFeed,
   markInboxSeen,
-  sendKudos,
+  emojiOf,
+  isReaction,
+  removeReaction,
+  sendNote,
+  sendReaction,
   subscribeSocial,
-  unsendFist,
   weeklyLeaderboard,
   type Kudos,
   type PublicProfile,
@@ -16,11 +19,13 @@ import {
 import { dayAt } from '../domain/program'
 import type { Profile, ProgramDef, WorkoutSession } from '../domain/types'
 import { rulesFor } from '../domain/units'
-import { Avatar } from './Friends'
+import { Avatar, ReportSheet } from './Friends'
 import { fmtDuration, fmtWeight } from './hooks'
 import { Icon } from './Icon'
 import { Sheet } from './Sheet'
 import { formatClock, useNow } from './timer'
+import { EmojiPicker, groupReactions, ReactionBar } from './Reactions'
+import { NotificationsPrompt } from './Notifications'
 
 /** Friends' data for the Feed, kept fresh by Supabase live updates. */
 function useSocial(session: Session | null) {
@@ -133,9 +138,10 @@ export function FeedView({
         </div>
       )}
 
-      {feed && feed.inbox.length > 0 && <ForYou feed={feed} />}
+      {feed && feed.inbox.length > 0 && <ForYou feed={feed} notify={notify} />}
 
       {feed && hasFriends && <LeaderboardCard feed={feed} onOpen={() => setBoard(true)} />}
+      {feed && hasFriends && <NotificationsPrompt notify={notify} />}
 
       {!session ? (
         <FriendsCta title="Train with friends" body="Sign in to see when friends are training, cheer them on and climb weekly leaderboards." action="Get started" onClick={onOpenFriends} />
@@ -183,7 +189,7 @@ export function FeedView({
           about={noteFor.title}
           onClose={() => setNoteFor(null)}
           onSend={async (msg) => {
-            await sendKudos(noteFor.user_id, noteFor.id, 'note', msg)
+            await sendNote(noteFor.user_id, noteFor.id, msg)
             setNoteFor(null)
             notify('Note sent')
             reload()
@@ -199,7 +205,23 @@ export function FeedView({
 
 export function LiveStrip({ feed, notify }: { feed: SocialFeed; notify: (m: string) => void }) {
   const now = useNow(30000)
-  const [sent, setSent] = useState<Record<string, boolean>>({})
+  const [sent, setSent] = useState<Record<string, string>>({})
+  const [pickFor, setPickFor] = useState<string | null>(null)
+  const nameOf = (id: string) => feed.profiles[id]?.display_name.split(/\s+/)[0] || feed.profiles[id]?.username || 'your friend'
+  const send = async (userId: string, emoji: string) => {
+    setSent((s) => ({ ...s, [userId]: emoji }))
+    try {
+      await sendReaction(userId, null, emoji)
+      notify(`${emoji} sent to ${nameOf(userId)}`)
+    } catch {
+      setSent((s) => {
+        const n = { ...s }
+        delete n[userId]
+        return n
+      })
+      notify("Couldn't send that. Check your connection.")
+    }
+  }
   return (
     <>
       <div className="section-title" style={{ marginTop: 22 }}>
@@ -212,27 +234,31 @@ export function LiveStrip({ feed, notify }: { feed: SocialFeed; notify: (m: stri
           return (
             <div key={l.user_id} className="live-card">
               <span className="live-ring"><Avatar p={p ?? null} size={44} /></span>
-              <span style={{ fontWeight: 600, marginTop: 6 }}>{p?.display_name.split(/\s+/)[0] || p?.username || 'Friend'}</span>
+              <span style={{ fontWeight: 600, marginTop: 6 }}>{nameOf(l.user_id)}</span>
               <span className="tiny muted">{l.title} · {mins} min</span>
-              <button
-                className={`fist-btn${sent[l.user_id] ? ' on' : ''}`}
-                disabled={sent[l.user_id]}
-                onClick={async () => {
-                  setSent((s) => ({ ...s, [l.user_id]: true }))
-                  try {
-                    await sendKudos(l.user_id, null, 'fist')
-                    notify(`Fist-bump sent to ${p?.display_name.split(/\s+/)[0] || 'your friend'}`)
-                  } catch {
-                    setSent((s) => ({ ...s, [l.user_id]: false }))
-                  }
-                }}
-              >
-                👊 {sent[l.user_id] ? 'Sent' : 'Send'}
-              </button>
+              <span className="row" style={{ gap: 6 }}>
+                <button className={`fist-btn${sent[l.user_id] ? ' on' : ''}`} onClick={() => void send(l.user_id, sent[l.user_id] ?? '👊')} aria-label={`Send ${sent[l.user_id] ?? '👊'} to ${nameOf(l.user_id)}`}>
+                  {sent[l.user_id] ?? '👊'}
+                </button>
+                <button className="fist-btn" onClick={() => setPickFor(l.user_id)} aria-label={`Choose an emoji for ${nameOf(l.user_id)}`}>
+                  <Icon name="smilePlus" size={16} />
+                </button>
+              </span>
             </div>
           )
         })}
       </div>
+      {pickFor && (
+        <EmojiPicker
+          title={`Cheer on ${nameOf(pickFor)}`}
+          onClose={() => setPickFor(null)}
+          onPick={(e) => {
+            const id = pickFor
+            setPickFor(null)
+            void send(id, e)
+          }}
+        />
+      )}
     </>
   )
 }
@@ -257,8 +283,9 @@ function ResumeCard({ active, onResume }: { active: ActiveWorkout; onResume: () 
 
 // ─── For you, leaderboard, CTA ─────────────────────────────────────────────
 
-export function ForYou({ feed }: { feed: SocialFeed }) {
+export function ForYou({ feed, notify = () => {} }: { feed: SocialFeed; notify?: (m: string) => void }) {
   const titleOf = (k: Kudos) => feed.activities.find((a) => a.id === k.activity_id)?.title
+  const [reporting, setReporting] = useState<Kudos | null>(null)
   return (
     <>
       <div className="section-title"><h2>For you</h2></div>
@@ -273,16 +300,28 @@ export function ForYou({ feed }: { feed: SocialFeed }) {
               <span className="grow">
                 <span style={{ display: 'block', lineHeight: 1.35 }}>
                   <b>{who}</b>{' '}
-                  {k.kind === 'fist' ? <>sent you a fist-bump{title ? <> on <b>{title}</b></> : ' while you trained'} 👊</> : <>left a note{title ? <> on <b>{title}</b></> : ''}</>}
+                  {isReaction(k) ? (
+                    <>reacted <span className="re-inline">{emojiOf(k)}</span>{title ? <> to <b>{title}</b></> : ' while you trained'}</>
+                  ) : (
+                    <>left a note{title ? <> on <b>{title}</b></> : ''}</>
+                  )}
                 </span>
                 {k.kind === 'note' && k.message && <span className="note-bubble">{k.message}</span>}
                 <span className="tiny muted" style={{ display: 'block', marginTop: 4 }}>{ago(k.created_at)}</span>
               </span>
               {!k.seen_at && <span className="unseen-dot" aria-label="New" />}
+              {k.kind === 'note' && (
+                <button className="icon-btn" style={{ width: 28, height: 28, marginTop: -2 }} aria-label="Report this note" onClick={() => setReporting(k)}>
+                  <Icon name="more" size={18} />
+                </button>
+              )}
             </div>
           )
         })}
       </div>
+      {reporting && feed.profiles[reporting.from_user] && (
+        <ReportSheet who={feed.profiles[reporting.from_user]} kudosId={reporting.id} onClose={() => setReporting(null)} notify={notify} />
+      )}
     </>
   )
 }
@@ -364,7 +403,7 @@ export function OwnItem({ s, unit, name, avatar, kudos, onOpen }: { s: WorkoutSe
         ...ups.slice(0, 2).map((e) => `${e.name} ${fmtWeight(e.next_weight_lbs)} ${unit} next`),
         ...(!ups.length && !r?.promoted && r?.session_target_met ? ['Hit every rep'] : []),
       ]
-  const fists = kudos.filter((k) => k.kind === 'fist').length
+  const groups = groupReactions(kudos, '')
   const notes = kudos.filter((k) => k.kind === 'note').length
   return (
     <button className="feed-item" onClick={onOpen}>
@@ -373,11 +412,8 @@ export function OwnItem({ s, unit, name, avatar, kudos, onOpen }: { s: WorkoutSe
         <span className="feed-line"><b>{name}</b> {activity ? 'logged' : 'finished'} <b>{s.title}</b></span>
         <Meta at={s.started_at} duration={s.duration_seconds} rpe={s.session_rpe} />
         <Highlights items={highlights} />
-        {(fists > 0 || notes > 0) && (
-          <span className="tiny muted" style={{ display: 'block', marginTop: 8 }}>
-            {fists > 0 && `👊 ${fists}`}{fists > 0 && notes > 0 && '  ·  '}{notes > 0 && `${notes} ${notes === 1 ? 'note' : 'notes'}`}
-          </span>
-        )}
+        <ReactionBar groups={groups} readOnly />
+        {notes > 0 && <span className="tiny muted" style={{ display: 'block', marginTop: 6 }}>{notes} {notes === 1 ? 'note' : 'notes'}</span>}
       </span>
       <Icon name="chevronRight" className="chev" />
     </button>
@@ -401,13 +437,34 @@ export function FriendItem({
   onChanged: () => void
   notify: (m: string) => void
 }) {
-  const fists = kudos.filter((k) => k.kind === 'fist')
-  const mine = fists.some((k) => k.from_user === me)
+  const [optimistic, setOptimistic] = useState<{ emoji: string; on: boolean }[]>([])
+  const [picking, setPicking] = useState(false)
   const myNotes = kudos.filter((k) => k.kind === 'note' && k.from_user === me).length
-  const [pending, setPending] = useState<boolean | null>(null)
-  const on = pending ?? mine
-  const count = fists.length + (pending === null ? 0 : pending && !mine ? 1 : !pending && mine ? -1 : 0)
   const name = who?.display_name.split(/\s+/)[0] || who?.username || 'A friend'
+
+  // Server state plus any taps still in flight, so chips respond instantly.
+  const groups = (() => {
+    const g = groupReactions(kudos, me)
+    for (const o of optimistic) {
+      const cur = g.find((x) => x.emoji === o.emoji)
+      if (o.on && !cur?.mine) cur ? ((cur.count += 1), (cur.mine = true)) : g.push({ emoji: o.emoji, count: 1, mine: true })
+      if (!o.on && cur?.mine) ((cur.count -= 1), (cur.mine = false))
+    }
+    return g.filter((x) => x.count > 0)
+  })()
+
+  const toggle = async (emoji: string, on: boolean) => {
+    setOptimistic((o) => [...o.filter((x) => x.emoji !== emoji), { emoji, on }])
+    try {
+      if (on) await sendReaction(a.user_id, a.id, emoji)
+      else await removeReaction(a.id, emoji)
+      onChanged()
+    } catch {
+      notify("Couldn't send that. Check your connection.")
+    } finally {
+      setTimeout(() => setOptimistic((o) => o.filter((x) => x.emoji !== emoji)), 1500)
+    }
+  }
 
   return (
     <div className="feed-item">
@@ -423,32 +480,23 @@ export function FriendItem({
             ))}
           </span>
         )}
-        <span className="react-row">
-          <button
-            className={`fist-btn${on ? ' on' : ''}`}
-            aria-pressed={on}
-            aria-label={on ? 'Remove fist-bump' : `Fist-bump ${name}`}
-            onClick={async () => {
-              const next = !on
-              setPending(next)
-              try {
-                if (next) await sendKudos(a.user_id, a.id, 'fist')
-                else await unsendFist(a.id)
-                onChanged()
-              } catch {
-                notify("Couldn't send that. Check your connection.")
-              } finally {
-                setPending(null)
-              }
-            }}
-          >
-            👊 {count > 0 ? count : ''}
-          </button>
-          <button className="fist-btn" onClick={onNote}>
+        <span className="row" style={{ gap: 6, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <ReactionBar groups={groups} onToggle={(e, on) => void toggle(e, on)} onAdd={() => setPicking(true)} />
+          <button className="reaction-chip" style={{ marginTop: 10 }} onClick={onNote}>
             <Icon name="pencil" size={14} /> {myNotes ? 'Noted' : 'Note'}
           </button>
         </span>
       </span>
+      {picking && (
+        <EmojiPicker
+          title={`React to ${name}`}
+          onClose={() => setPicking(false)}
+          onPick={(e) => {
+            setPicking(false)
+            void toggle(e, true)
+          }}
+        />
+      )}
     </div>
   )
 }
