@@ -222,3 +222,43 @@ export async function signUpWithPassword(email: string, password: string): Promi
   if (error) throw error
   return !data.session
 }
+
+// ─── Social sign-in ─────────────────────────────────────────────────────────
+
+export type SocialProvider = 'google' | 'apple' | 'github' | 'discord' | 'facebook'
+export const SOCIAL_PROVIDERS: SocialProvider[] = ['apple', 'google', 'github', 'discord', 'facebook']
+const PROVIDERS_KEY = 'auth-providers'
+
+/**
+ * Providers switched on in the Supabase dashboard. Read from the project's public auth
+ * settings, so turning one on there shows its button here without a new release.
+ */
+export async function enabledProviders(): Promise<SocialProvider[]> {
+  const cfg = getSyncConfig()
+  if (!cfg) return []
+  try {
+    const res = await fetch(`${cfg.url}/auth/v1/settings`, { headers: { apikey: cfg.anonKey } })
+    const json = (await res.json()) as { external?: Record<string, boolean> }
+    const list = SOCIAL_PROVIDERS.filter((p) => json.external?.[p])
+    try {
+      localStorage.setItem(PROVIDERS_KEY, JSON.stringify(list))
+    } catch {
+      /* ignore */
+    }
+    return list
+  } catch {
+    try {
+      return JSON.parse(localStorage.getItem(PROVIDERS_KEY) ?? '[]') as SocialProvider[]
+    } catch {
+      return []
+    }
+  }
+}
+
+/** Leaves the app for the provider's sign-in page; Supabase sends the user back signed in. */
+export async function signInWithProvider(provider: SocialProvider) {
+  const c = await getClient()
+  if (!c) throw new Error('Supabase is not configured')
+  const { error } = await c.auth.signInWithOAuth({ provider, options: { redirectTo: appUrl() } })
+  if (error) throw error
+}

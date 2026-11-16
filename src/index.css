@@ -492,3 +492,11 @@ button.stream-row:active { background: var(--surface-2); }
   .tab:hover { color: var(--text-2); }
   .tile:hover { box-shadow: inset 0 0 0 1px var(--line-strong); }
 }
+
+/* ─── Social sign-in ───────────────────────────────────────────────────── */
+.btn.social { background: var(--surface); color: var(--text); font-weight: 600; gap: 10px; }
+.btn.social-apple { background: var(--text); color: var(--bg); }
+.btn.social-discord { background: #5865f2; color: #fff; }
+.btn.social-facebook { background: #1877f2; color: #fff; }
+.or-divider { display: flex; align-items: center; gap: 12px; color: var(--text-2); font-size: 13px; margin: 4px 0; }
+.or-divider::before, .or-divider::after { content: ''; flex: 1; height: 0.5px; background: var(--line-strong); }
