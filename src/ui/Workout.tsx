@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ActiveWorkout } from '../data/db'
 import { addExerciseToActive, changeSetCount, discardWorkout, finishWorkout, patchActive, removeExerciseFromActive } from '../data/repo'
 import { getExercise } from '../domain/catalog'
@@ -13,9 +13,21 @@ import { fmtWeight } from './hooks'
 import { Icon } from './Icon'
 import { PlateGraphic } from './PlateGraphic'
 import { Sheet, Stepper } from './Sheet'
-import { timer, useTimer, useWakeLock } from './timer'
+import { formatClock, timer, useNow, useTimer, useWakeLock } from './timer'
 
 const MISSED_REST_SEC = 270
+
+/** Guided length for warm-up items; programs saved before durations existed fall back by id. */
+const READY_DEFAULTS: Record<string, number> = { temp: 150, shoulder: 90, hip: 90 }
+const readyDuration = (r: { id: string; duration_sec?: number }) => r.duration_sec ?? READY_DEFAULTS[r.id] ?? 0
+const readyRef = (id: string) => `ready#${id}`
+
+/** "12:34" or "1:02:03" for the live workout clock. */
+const elapsedLabel = (sec: number) => {
+  const s = Math.max(0, Math.floor(sec))
+  const h = Math.floor(s / 3600)
+  return h ? `${h}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : formatClock(s)
+}
 const setRef = (key: string, i: number) => `${key}#${i}`
 
 function restFor(ex: PlannedExercise, reps: number): { sec: number; missed: boolean } {
@@ -101,6 +113,30 @@ export function ActiveWorkoutView({
     }
   }
 
+  // Live clock and warm-up countdowns tick from timestamps, so they stay right after locking the phone.
+  const now = useNow(1000)
+  const t = useTimer()
+  const elapsed = (now - Date.parse(active.started_at)) / 1000
+  const readyRunning = t && t.ref?.startsWith('ready#') && !t.fired ? t.ref.slice(6) : null
+
+  // A finished warm-up countdown ticks its item off.
+  const firedReady = t?.fired && t.ref?.startsWith('ready#') ? t.ref.slice(6) : null
+  useEffect(() => {
+    if (!firedReady) return
+    void patchActive((a) => {
+      if (!a.readiness_done.includes(firedReady)) a.readiness_done = [...a.readiness_done, firedReady]
+    })
+  }, [firedReady])
+
+  const startReady = (r: { id: string; label: string; duration_sec?: number }) => {
+    if (readyRunning === r.id) {
+      timer.clear()
+      return
+    }
+    const next = active.plan.readiness.find((x) => x.id !== r.id && !active.readiness_done.includes(x.id))
+    timer.start(readyDuration(r), `Warm-up: ${r.label}${next ? ` · then ${next.label.toLowerCase()}` : ''}`, readyRef(r.id))
+  }
+
   const toggleReadiness = (id: string) =>
     void patchActive((a) => {
       a.readiness_done = a.readiness_done.includes(id) ? a.readiness_done.filter((x) => x !== id) : [...a.readiness_done, id]
@@ -124,13 +160,19 @@ export function ActiveWorkoutView({
   return (
     <>
       <div className="spread" style={{ marginBottom: 2 }}>
-        <span className="today-date">{doneSets} of {totalSets} sets</span>
+        <span className="today-date">
+          <span className="num" aria-label={`Workout time ${elapsedLabel(elapsed)}`} style={{ color: 'var(--text)' }}>
+            <Icon name="clock" size={13} /> {elapsedLabel(elapsed)}
+          </span>
+          {' · '}
+          {doneSets} of {totalSets} sets
+        </span>
         <button className="btn ghost danger" style={{ height: 32, padding: 0 }} onClick={() => setConfirmDiscard(true)}>Discard</button>
       </div>
       <h1 className="today-title">{active.plan.title}</h1>
 
       {readyTotal > 0 && (
-        <details className="card drawer" style={{ marginTop: 14 }} open={readyDone === 0}>
+        <details className="card drawer" style={{ marginTop: 14 }} open={readyDone < readyTotal}>
           <summary>
             <span className={`check${readyDone === readyTotal ? ' on' : ''}`}><Icon name="check" size={14} /></span>
             Warm up
@@ -139,14 +181,25 @@ export function ActiveWorkoutView({
           </summary>
           {active.plan.readiness.map((r) => {
             const on = active.readiness_done.includes(r.id)
+            const dur = readyDuration(r)
+            const running = readyRunning === r.id
+            const left = running && t ? (t.endsAt - now) / 1000 : dur
             return (
-              <button key={r.id} className="check-row" onClick={() => toggleReadiness(r.id)} aria-pressed={on}>
-                <span className={`check${on ? ' on' : ''}`}><Icon name="check" size={14} /></span>
-                <span>
-                  <span style={{ fontWeight: 500 }}>{r.label}</span>
-                  <span className="small muted" style={{ display: 'block' }}>{r.detail}</span>
-                </span>
-              </button>
+              <div key={r.id} className="check-row" style={{ alignItems: 'center' }}>
+                <button className="row grow" style={{ alignItems: 'flex-start', gap: 12, textAlign: 'left' }} onClick={() => toggleReadiness(r.id)} aria-pressed={on}>
+                  <span className={`check${on ? ' on' : ''}`} style={{ marginTop: 1 }}><Icon name="check" size={14} /></span>
+                  <span>
+                    <span style={{ fontWeight: 500 }}>{r.label}</span>
+                    <span className="small muted" style={{ display: 'block' }}>{r.detail}</span>
+                  </span>
+                </button>
+                {dur > 0 && !on && (
+                  <button className={`timer-pill${running ? ' running' : ''}`} onClick={() => startReady(r)} aria-label={running ? `Stop ${r.label} timer` : `Start ${formatClock(dur)} timer for ${r.label}`}>
+                    <Icon name={running ? 'x' : 'timer'} size={14} />
+                    <span className="num">{formatClock(Math.ceil(left))}</span>
+                  </button>
+                )}
+              </div>
             )
           })}
         </details>

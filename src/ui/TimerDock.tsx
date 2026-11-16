@@ -24,7 +24,7 @@ export function TimerDock() {
       <div className="dock-inner">
         <div className="grow">
           <div className={`dock-time num${over ? ' over' : ''}`}>{over ? `+${formatClock(-remaining)}` : formatClock(remaining)}</div>
-          <div className="dock-label">{over ? 'Rest done — go' : t.label}</div>
+          <div className="dock-label">{over ? (t.ref?.startsWith('ready#') ? 'Warm-up done — next one' : 'Rest done — go') : t.label}</div>
         </div>
         {!over && (
           <>

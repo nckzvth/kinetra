@@ -177,9 +177,9 @@ const PPL_PHASES: Record<PhaseNumber, PhaseDef> = {
 // ─── Templates ──────────────────────────────────────────────────────────────
 
 const readiness = (code: string): ReadinessItem[] => {
-  const items: ReadinessItem[] = [{ id: 'temp', label: 'Raise your temperature', detail: '2–3 min brisk walk, bike or rower' }]
-  if (/PUSH|PULL|UPPER|FULL/.test(code)) items.push({ id: 'shoulder', label: 'Shoulders', detail: '12 band dislocates or arm circles, 15 band pull-aparts' })
-  if (/LEGS|PULL|LOWER|FULL/.test(code)) items.push({ id: 'hip', label: 'Hips and ankles', detail: '8 deep squat pries, 8 bodyweight hip hinges' })
+  const items: ReadinessItem[] = [{ id: 'temp', label: 'Raise your temperature', detail: '2–3 min brisk walk, bike or rower', duration_sec: 150 }]
+  if (/PUSH|PULL|UPPER|FULL/.test(code)) items.push({ id: 'shoulder', label: 'Shoulders', detail: '12 band dislocates or arm circles, 15 band pull-aparts', duration_sec: 90 })
+  if (/LEGS|PULL|LOWER|FULL/.test(code)) items.push({ id: 'hip', label: 'Hips and ankles', detail: '8 deep squat pries, 8 bodyweight hip hinges', duration_sec: 90 })
   return items
 }
 

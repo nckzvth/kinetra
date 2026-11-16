@@ -511,3 +511,6 @@ button.stream-row:active { background: var(--surface-2); }
 .account-badge .avatar-fallback { display: grid; place-items: center; background: var(--tint); color: #fff; font-size: 13px; font-weight: 700; }
 .account-badge-name { font-size: 15px; font-weight: 600; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .popover { position: absolute; right: 0; top: 44px; z-index: 40; min-width: 240px; background: var(--surface); border-radius: 12px; box-shadow: var(--shadow-lg); overflow: hidden; }
+
+.timer-pill { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--info-soft); color: var(--tint); font-size: 15px; font-weight: 600; flex-shrink: 0; }
+.timer-pill.running { background: var(--tint); color: #fff; }

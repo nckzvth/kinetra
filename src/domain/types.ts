@@ -296,6 +296,8 @@ export interface ReadinessItem {
   id: string
   label: string
   detail: string
+  /** Optional guided countdown for this item. */
+  duration_sec?: number
 }
 
 export interface SessionPlan {
