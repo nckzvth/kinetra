@@ -1,9 +1,16 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+
+/** Fields that bring up the on-screen keyboard. */
+const TYPING_FIELD = 'textarea, input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=button]):not([hidden])'
 
 /**
  * Bottom sheet (centered dialog on wide screens). Pass `title` for a simple header, or
  * `left` / `right` actions for an iOS-style "Cancel · Title · Done" bar.
+ *
+ * On phones, a sheet you type into opens from the top of the screen instead (like iOS Mail or
+ * Messages compose), so the keyboard can never cover its field or its Send/Post button,
+ * whatever the browser reports about the keyboard. Override with `placement`.
  */
 export function Sheet({
   title,
@@ -11,13 +18,28 @@ export function Sheet({
   left,
   right,
   children,
+  placement,
 }: {
   title?: ReactNode
   onClose: () => void
   left?: ReactNode
   right?: ReactNode
   children: ReactNode
+  placement?: 'top' | 'bottom'
 }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [hasField, setHasField] = useState(false)
+  // Before first paint, so the sheet never flashes at the bottom first.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const check = () => setHasField(!!el.querySelector(TYPING_FIELD))
+    check()
+    const mo = new MutationObserver(check)
+    mo.observe(el, { childList: true, subtree: true })
+    return () => mo.disconnect()
+  }, [])
+  const top = (placement ?? (hasField ? 'top' : 'bottom')) === 'top'
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -25,8 +47,8 @@ export function Sheet({
   }, [onClose])
   // Portal to <body> so a sheet opened from inside a sticky or scrolling area is never clipped or layered under it.
   return createPortal(
-    <div className="scrim" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+    <div className={`scrim${top ? ' top' : ''}`} onClick={onClose}>
+      <div ref={ref} className={`sheet${top ? ' top' : ''}`} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-grip" />
         {(title || left || right) && (
           <div className="sheet-head">

@@ -404,6 +404,19 @@ button.ex-row:active { background: var(--surface-2); }
 .sheet-head h3 { font-size: 19px; font-weight: 700; text-align: center; flex: 1; }
 .sheet-head .btn.ghost { padding: 0 4px; height: 36px; min-width: 64px; }
 @keyframes rise { from { transform: translateY(40px); opacity: 0; } }
+@keyframes drop { from { transform: translateY(-24px); opacity: 0; } }
+/* Phones: sheets with a text field hang from the top so the keyboard can't cover them. */
+@media (max-width: 767px) {
+  .scrim.top { align-items: flex-start; }
+  .sheet.top {
+    border-radius: 0 0 16px 16px;
+    padding: calc(10px + var(--safe-t)) 16px 16px;
+    max-height: var(--vvh, 100dvh);
+    animation: drop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+  .sheet.top .sheet-grip { display: none; }
+  .kb-open .sheet.top { padding-bottom: 12px; }
+}
 @keyframes fade { from { opacity: 0; } }
 
 /* ─── Plate graphic ────────────────────────────────────────────────────── */
