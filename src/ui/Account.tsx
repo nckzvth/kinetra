@@ -27,6 +27,8 @@ export function SignInForm({ notify, onDone }: { notify: (m: string) => void; on
 
   const valid = email.includes('@') && password.length >= (mode === 'create' ? 8 : 6)
   const [providers, setProviders] = useState<SocialProvider[]>([])
+  // Once we've left for the provider, keep the buttons locked so a second tap can't start a second sign-in.
+  const [leavingFor, setLeavingFor] = useState<SocialProvider | null>(null)
   useEffect(() => {
     void enabledProviders().then(setProviders)
   }, [])
@@ -35,8 +37,16 @@ export function SignInForm({ notify, onDone }: { notify: (m: string) => void; on
       {providers.length > 0 && (
         <>
           {providers.map((p) => (
-            <button key={p} className={`btn block social social-${p}`} disabled={busy} onClick={() => run(() => signInWithProvider(p))}>
-              <ProviderMark provider={p} /> Continue with {PROVIDER_NAME[p]}
+            <button
+              key={p}
+              className={`btn block social social-${p}`}
+              disabled={busy || leavingFor !== null}
+              onClick={() => {
+                setLeavingFor(p)
+                void run(() => signInWithProvider(p)).finally(() => setTimeout(() => setLeavingFor(null), 8000))
+              }}
+            >
+              <ProviderMark provider={p} /> {leavingFor === p ? `Opening ${PROVIDER_NAME[p]}…` : `Continue with ${PROVIDER_NAME[p]}`}
             </button>
           ))}
           <div className="or-divider"><span>or use email</span></div>

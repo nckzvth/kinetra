@@ -1,7 +1,8 @@
 import type { Session } from '@supabase/supabase-js'
 import { useCallback, useEffect, useState } from 'react'
 import { ensureSeeded } from './data/repo'
-import { getClient, isSyncConfigured, syncNow } from './data/sync'
+import { consumeAuthError, describeAuthError, enabledProviders, getClient, isSyncConfigured, signInWithProvider, syncNow } from './data/sync'
+import { Sheet } from './ui/Sheet'
 import { registerCustomExercises } from './domain/catalog'
 import { rulesFor } from './domain/units'
 import { ActivityView } from './ui/Activity'
@@ -94,6 +95,34 @@ export default function App() {
   const wide = useMediaQuery('(min-width: 900px)')
   const { toast, show } = useToast()
   const { session, syncing, restoring, sync } = useSync(show)
+  // A sign-in that failed on the way back from Google lands here with ?error=… in the URL.
+  const [authError, setAuthError] = useState(consumeAuthError)
+  const [googleOn, setGoogleOn] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  useEffect(() => {
+    if (authError) void enabledProviders().then((p) => setGoogleOn(p.includes('google')))
+  }, [authError])
+  const authSheet =
+    authError && !session ? (
+      <Sheet title="Sign-in didn't finish" onClose={() => setAuthError(null)}>
+        <p className="muted" style={{ textAlign: 'center', margin: '0 8px 18px', lineHeight: 1.45 }}>{describeAuthError(authError)}</p>
+        <div className="stack" style={{ gap: 8 }}>
+          {googleOn && (
+            <button
+              className="btn tint block"
+              disabled={retrying}
+              onClick={() => {
+                setRetrying(true)
+                void signInWithProvider('google').catch(() => setRetrying(false))
+              }}
+            >
+              {retrying ? 'Opening Google…' : 'Try again with Google'}
+            </button>
+          )}
+          <button className="btn block" style={{ background: 'var(--surface)' }} onClick={() => setAuthError(null)}>Not now</button>
+        </div>
+      </Sheet>
+    ) : null
 
   useEffect(() => {
     void ensureSeeded().then(() => setReady(true))
@@ -121,6 +150,7 @@ export default function App() {
     return (
       <>
         <Onboarding notify={show} session={session} restoring={restoring} />
+        {authSheet}
         {toast}
       </>
     )
@@ -231,6 +261,7 @@ export default function App() {
             </button>
           ))}
         </nav>
+        {authSheet}
         {toast}
       </div>
     )
@@ -255,6 +286,7 @@ export default function App() {
         </div>
       </nav>
       {stage}
+      {authSheet}
       {toast}
     </div>
   )

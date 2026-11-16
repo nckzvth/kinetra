@@ -262,3 +262,37 @@ export async function signInWithProvider(provider: SocialProvider) {
   const { error } = await c.auth.signInWithOAuth({ provider, options: { redirectTo: appUrl() } })
   if (error) throw error
 }
+
+// ─── Sign-in errors returned in the URL ─────────────────────────────────────
+
+export interface ReturnedAuthError {
+  code: string
+  description: string
+}
+
+/**
+ * Supabase sends sign-in failures back as ?error=… or #error=… on the app URL.
+ * Read them once at startup and tidy the address bar so a reload doesn't repeat them.
+ */
+export function consumeAuthError(): ReturnedAuthError | null {
+  const search = new URLSearchParams(location.search)
+  const hash = new URLSearchParams(location.hash.replace(/^#/, ''))
+  const pick = (k: string) => search.get(k) ?? hash.get(k)
+  const code = pick('error_code') ?? pick('error')
+  if (!code) return null
+  const description = pick('error_description') ?? ''
+  for (const k of ['error', 'error_code', 'error_description']) search.delete(k)
+  const rest = search.toString()
+  history.replaceState(null, '', location.pathname + (rest ? `?${rest}` : ''))
+  return { code, description }
+}
+
+/** Plain-language explanation for the common sign-in failures. */
+export function describeAuthError(e: ReturnedAuthError): string {
+  const d = e.description.toLowerCase()
+  if (d.includes('exchange external code'))
+    return "The sign-in with Google didn't finish. This usually happens when the page loads twice on the way back. Trying again normally works straight away."
+  if (d.includes('access_denied') || e.code === 'access_denied') return 'Sign-in was cancelled. You can try again whenever you like.'
+  if (d.includes('expired')) return 'That sign-in link has expired. Try signing in again.'
+  return "Sign-in didn't finish. Please try again."
+}
