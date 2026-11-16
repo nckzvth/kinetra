@@ -12,10 +12,10 @@ Status as of November 2026. Live app: https://nckzvth.github.io/kinetra/
 
 ## Next: Friends
 
-The social layer that makes people come back daily.
+The social layer that makes people come back daily. The **Feed** tab already exists (your own activity, resume and up-next cards); friends' activity slots into it.
 
 - **Adding friends:** share an invite link or search by username, then accept the request. Nothing is shared until both sides agree.
-- **Working out now:** a live "Nick is training · Push A · 18 min" line at the top of Today, using Supabase's live updates.
+- **Working out now:** a live "Nick is training · Push A · 18 min" line at the top of Feed, using Supabase's live updates.
 - **Feed:** each friend's finished workouts (e.g. "Nick finished Pull A · Deadlift 125 lb · new best"), plus runs, rounds and climbs.
 - **Encouragement:**
   - one-tap fist-bump on a workout or while someone is training;

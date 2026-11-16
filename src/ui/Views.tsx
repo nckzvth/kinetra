@@ -145,12 +145,15 @@ export function HistoryView({
   onSelect,
   program,
   unit,
+  embedded = false,
 }: {
   sessions: WorkoutSession[]
   selected: string | null
   onSelect: (id: string | null) => void
   program: ProgramDef | null
   unit: string
+  /** Inside the Progress tab, which supplies its own title. */
+  embedded?: boolean
 }) {
   const s = sessions.find((x) => x.id === selected)
   const wide = useMediaQuery('(min-width: 900px)')
@@ -160,12 +163,12 @@ export function HistoryView({
     return (
       <div className="split">
         <div className="split-list">
-          <h1 className="page-title" style={{ marginBottom: 14 }}>History</h1>
-          <div className="card" style={{ maxHeight: 'calc(100dvh - 160px)', overflowY: 'auto' }}>
+          {!embedded && <h1 className="page-title" style={{ marginBottom: 14 }}>History</h1>}
+          <div className="card" style={{ maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' }}>
             <HistoryList sessions={sessions} selected={shown?.id ?? null} onSelect={onSelect} />
           </div>
         </div>
-        <div className="split-detail" style={{ paddingTop: 52 }}>
+        <div className="split-detail" style={{ paddingTop: embedded ? 0 : 52 }}>
           {shown ? <SessionResultView session={shown} program={program} unit={unit} /> : <div className="card empty">Finish a workout and it shows up here.</div>}
         </div>
       </div>
@@ -181,7 +184,7 @@ export function HistoryView({
   }
   return (
     <>
-      <h1 className="page-title" style={{ marginBottom: 14 }}>History</h1>
+      {!embedded && <h1 className="page-title" style={{ marginBottom: 14 }}>History</h1>}
       <div className="card" style={{ overflow: 'hidden' }}>
         <HistoryList sessions={sessions} onSelect={onSelect} />
       </div>
@@ -208,7 +211,7 @@ function Sparkline({ points }: { points: number[] }) {
   )
 }
 
-export function ProgressView({ profile, states, program }: { profile: Profile; states: Record<string, ExerciseState>; program: ProgramDef | null }) {
+export function ProgressView({ profile, states, program, embedded = false }: { profile: Profile; states: Record<string, ExerciseState>; program: ProgramDef | null; embedded?: boolean }) {
   const unit = rulesFor(profile.unit_system).label
   // Lifts worth charting: the program's main lifts, else anything with an e1RM.
   const lifts = (() => {
@@ -240,10 +243,10 @@ export function ProgressView({ profile, states, program }: { profile: Profile; s
   const phase = profile.current_phase
   return (
     <>
-      <h1 className="page-title">Progress</h1>
+      {!embedded && <h1 className="page-title">Progress</h1>}
       {program && program.phases.length > 1 && (
         <>
-          <div className="section-title"><h2>{program.name}</h2></div>
+          <div className="section-title" style={embedded ? { marginTop: 4 } : undefined}><h2>{program.name}</h2></div>
           <div className="phase-track">
             {program.phases.map((def) => {
               const p = def.phase

@@ -527,3 +527,19 @@ button.stream-row:active { background: var(--surface-2); }
 .account-chip img, .account-chip .avatar-fallback { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .account-chip .avatar-fallback { display: grid; place-items: center; background: var(--tint); color: #fff; font-weight: 700; }
 .success-badge { width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: inline-grid; place-items: center; }
+
+/* ─── Feed ─────────────────────────────────────────────────────────────── */
+.feed-hero { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; padding: 18px; margin-top: 18px; }
+.feed-hero-title { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; margin-top: 2px; }
+.feed-hero.live { box-shadow: inset 0 0 0 2px var(--accent); }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 7px transparent; } }
+.feed-friends { display: flex; gap: 12px; align-items: flex-start; margin-top: 12px; }
+.feed-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; width: 100%; text-align: left; }
+.feed-item .chev { margin-top: 8px; }
+.feed-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--info-soft); color: var(--tint); display: grid; place-items: center; flex-shrink: 0; }
+.feed-line { display: block; line-height: 1.35; }
+.feed-line b { font-weight: 600; }
+.tab { position: relative; }
+.tab-live { position: absolute; top: 8px; right: calc(50% - 18px); width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--bar-bg); }
+@media (hover: hover) { button.feed-item:hover, button.feed-hero:hover { background: var(--surface-2); } }

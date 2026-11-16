@@ -103,7 +103,7 @@ export function InstallBanner() {
   const [hidden, setHidden] = useState(isBannerSnoozed)
   if (hidden || install.standalone || !isPhoneOrTablet()) return null
   return (
-    <div className="card card-pad install-banner" style={{ marginBottom: 18, position: 'relative' }}>
+    <div className="card card-pad install-banner" style={{ position: 'relative' }}>
       <button
         className="icon-btn"
         style={{ position: 'absolute', top: 6, right: 6 }}

@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ensureSeeded } from './data/repo'
 import { consumeAuthError, describeAuthError, enabledProviders, getClient, isSyncConfigured, signInWithProvider, syncNow } from './data/sync'
 import { Sheet } from './ui/Sheet'
@@ -13,16 +13,17 @@ import { Icon, type IconName } from './ui/Icon'
 import { Onboarding } from './ui/Onboarding'
 import { TimerDock } from './ui/TimerDock'
 import { TodayView } from './ui/Today'
+import { FeedView } from './ui/Feed'
 import { InstallBanner } from './ui/InstallBanner'
 import { HistoryView, ProgressView, SessionResultView, useToast } from './ui/Views'
 import { ActiveWorkoutView } from './ui/Workout'
 import { YouView } from './ui/You'
 
-type View = 'today' | 'history' | 'log' | 'progress' | 'you'
+type View = 'feed' | 'work' | 'log' | 'progress' | 'you'
 
 const NAV: { view: View; label: string; icon: IconName }[] = [
-  { view: 'today', label: 'Today', icon: 'barbell' },
-  { view: 'history', label: 'History', icon: 'history' },
+  { view: 'feed', label: 'Feed', icon: 'home' },
+  { view: 'work', label: 'Work', icon: 'barbell' },
   { view: 'log', label: 'Log', icon: 'plus' },
   { view: 'progress', label: 'Progress', icon: 'chart' },
   { view: 'you', label: 'You', icon: 'user' },
@@ -89,7 +90,8 @@ function useSync(notify: (m: string) => void) {
 
 export default function App() {
   const [ready, setReady] = useState(false)
-  const [view, setView] = useState<View>('today')
+  const [view, setView] = useState<View>('feed')
+  const [progressTab, setProgressTab] = useState<'history' | 'stats'>('history')
   const [summaryId, setSummaryId] = useState<string | null>(null)
   const [historyId, setHistoryId] = useState<string | null>(null)
   const [openDay, setOpenDay] = useState<string | null>(null)
@@ -139,6 +141,13 @@ export default function App() {
     if (custom) registerCustomExercises(custom.map((c) => c.definition))
   }, [custom])
   const clearOpenDay = useCallback(() => setOpenDay(null), [])
+  // Land on Feed, but reopen straight into Work if a workout was left in progress.
+  const landed = useRef(false)
+  useEffect(() => {
+    if (landed.current || active === undefined) return
+    landed.current = true
+    if (active) setView('work')
+  }, [active])
   // Back up right after setup finishes so a second device can restore it immediately.
   const onboarded = profile?.onboarded
   useEffect(() => {
@@ -163,13 +172,32 @@ export default function App() {
 
   const go = (v: View) => {
     setView(v)
-    if (v !== 'history') setHistoryId(null)
+    if (v !== 'progress') setHistoryId(null)
     document.querySelector('.stage-scroll')?.scrollTo({ top: 0 })
   }
 
   const content = (() => {
     switch (view) {
-      case 'today':
+      case 'feed':
+        return (
+          <>
+            <FeedView
+              profile={profile}
+              program={program}
+              sessions={sessions}
+              active={active}
+              onGoWork={() => go('work')}
+              onOpenSession={(id) => {
+                go('progress')
+                setProgressTab('history')
+                setHistoryId(id)
+              }}
+              onLog={() => go('log')}
+              installBanner={<InstallBanner />}
+            />
+          </>
+        )
+      case 'work':
         if (summary)
           return (
             <SessionResultView
@@ -197,7 +225,6 @@ export default function App() {
           )
         return (
           <>
-          <InstallBanner />
           <TodayView
             profile={profile}
             states={states}
@@ -211,20 +238,36 @@ export default function App() {
           />
           </>
         )
-      case 'history':
-        return <HistoryView sessions={sessions} selected={historyId} onSelect={setHistoryId} program={program} unit={unit} />
       case 'log':
         return (
           <ActivityView
             onSaved={(id) => {
-              setView('history')
+              setView('progress')
+              setProgressTab('history')
               setHistoryId(id)
               if (session) void sync(true)
             }}
           />
         )
       case 'progress':
-        return <ProgressView profile={profile} states={states} program={program} />
+        return (
+          <>
+            <div className="spread" style={{ flexWrap: 'wrap', gap: 12 }}>
+              <h1 className="page-title">Progress</h1>
+              <div className="seg" role="tablist" aria-label="Progress view">
+                <button role="tab" aria-pressed={progressTab === 'history'} aria-selected={progressTab === 'history'} onClick={() => setProgressTab('history')}>History</button>
+                <button role="tab" aria-pressed={progressTab === 'stats'} aria-selected={progressTab === 'stats'} onClick={() => { setProgressTab('stats'); setHistoryId(null) }}>Stats</button>
+              </div>
+            </div>
+            <div style={{ marginTop: 16 }}>
+              {progressTab === 'history' ? (
+                <HistoryView sessions={sessions} selected={historyId} onSelect={setHistoryId} program={program} unit={unit} embedded />
+              ) : (
+                <ProgressView profile={profile} states={states} program={program} embedded />
+              )}
+            </div>
+          </>
+        )
       case 'you':
         return (
           <YouView
@@ -245,7 +288,7 @@ export default function App() {
   const stage = (
     <main className="stage">
       <div className="stage-scroll">
-        <div className={`stage-inner${(view === 'today' && (active || summary)) || view === 'log' ? ' narrow' : ''}`}>{content}</div>
+        <div className={`stage-inner${(view === 'work' && (active || summary)) || view === 'log' || view === 'feed' ? ' narrow' : ''}`}>{content}</div>
       </div>
       <TimerDock />
     </main>
@@ -259,7 +302,8 @@ export default function App() {
           {NAV.map((n) => (
             <button key={n.view} className="tab" aria-current={view === n.view ? 'page' : undefined} onClick={() => go(n.view)}>
               <Icon name={n.icon} size={24} />
-              {n.view === 'today' && active ? 'Workout' : n.label}
+              {n.label}
+              {n.view === 'work' && active && <span className="tab-live" aria-label="Workout in progress" />}
             </button>
           ))}
         </nav>
@@ -280,7 +324,8 @@ export default function App() {
         {NAV.map((n) => (
           <button key={n.view} className="rail-item" aria-current={view === n.view ? 'page' : undefined} onClick={() => go(n.view)}>
             <Icon name={n.icon} />
-            {n.view === 'today' && active ? 'Workout' : n.view === 'log' ? 'Log activity' : n.label}
+            {n.view === 'log' ? 'Log activity' : n.label}
+            {n.view === 'work' && active && <span className="chip accent" style={{ marginLeft: 'auto', height: 20 }}>Live</span>}
           </button>
         ))}
         <div className="rail-foot row">
