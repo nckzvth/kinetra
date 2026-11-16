@@ -1,33 +1,38 @@
 import { getExercise } from '../domain/catalog'
-import { PHASES } from '../domain/program'
+import { phaseOf } from '../domain/program'
+import { rulesFor, roundToStep } from '../domain/units'
 import type {
   ExerciseResult,
   ExerciseState,
   LoadAction,
   PhaseNumber,
   Profile,
+  ProgramDef,
   SessionLog,
   SessionPlan,
   SessionResult,
 } from '../domain/types'
 
 export const DELOAD_MULTIPLIER = 0.9
-export const DEADLIFT_10LB_CAP = 185
 export const FAILURES_BEFORE_DELOAD = 2
+
+type UnitProfile = Pick<Profile, 'dumbbell_step_lbs' | 'barbell_weight_lbs'> & Partial<Pick<Profile, 'unit_system'>>
 
 export const isLinear = (t: string) => t === 'LINEAR' || t === 'LINEAR_DEADLIFT'
 
 /** Load increment for an exercise at a given weight. */
-export function incrementFor(exerciseId: string, weight: number, profile: Pick<Profile, 'dumbbell_step_lbs'>): number {
+export function incrementFor(exerciseId: string, weight: number, profile: Pick<Profile, 'dumbbell_step_lbs'> & Partial<Pick<Profile, 'unit_system'>>): number {
   const ex = getExercise(exerciseId)
-  if (ex.progression_type === 'LINEAR_DEADLIFT') return weight < DEADLIFT_10LB_CAP ? 10 : 5
-  if (ex.increment_lbs) return ex.increment_lbs
+  const r = rulesFor(profile.unit_system ?? 'IMPERIAL')
+  if (ex.progression_type === 'LINEAR_DEADLIFT') return weight < r.deadliftTaperAt ? r.deadliftIncrement : r.barbellIncrement
   if (ex.equipment === 'DUMBBELL') return profile.dumbbell_step_lbs
-  return 5
+  if (ex.increment_lbs) return r.unit === 'IMPERIAL' ? ex.increment_lbs : r.bigMachineIncrement
+  if (ex.equipment === 'BARBELL') return r.barbellIncrement
+  if (ex.equipment === 'CABLE') return r.cableIncrement
+  return r.machineIncrement
 }
 
-export const deloadWeight = (w: number, floor: number) =>
-  Math.max(floor, Math.round((w * DELOAD_MULTIPLIER) / 5) * 5)
+export const deloadWeight = (w: number, floor: number, step = 5) => roundToStep(w * DELOAD_MULTIPLIER, step, floor)
 
 interface LiftEval {
   target_met: boolean
@@ -47,7 +52,7 @@ export function evaluateLinear(
   reps: number[],
   repsTarget: number,
   failures: number,
-  profile: Pick<Profile, 'dumbbell_step_lbs' | 'barbell_weight_lbs'>,
+  profile: UnitProfile,
 ): LiftEval {
   const met = reps.length > 0 && reps.every((r) => r >= repsTarget)
   if (met) {
@@ -55,7 +60,7 @@ export function evaluateLinear(
   }
   const f = failures + 1
   if (f >= FAILURES_BEFORE_DELOAD) {
-    return { target_met: false, upgrade_load: false, next_weight: deloadWeight(weight, profile.barbell_weight_lbs), next_failures: 0, action: 'DELOAD' }
+    return { target_met: false, upgrade_load: false, next_weight: deloadWeight(weight, profile.barbell_weight_lbs, rulesFor(profile.unit_system ?? 'IMPERIAL').round), next_failures: 0, action: 'DELOAD' }
   }
   return { target_met: false, upgrade_load: false, next_weight: weight, next_failures: f, action: 'HOLD' }
 }
@@ -72,7 +77,7 @@ export function evaluateDouble(
   min: number,
   max: number,
   failures: number,
-  profile: Pick<Profile, 'dumbbell_step_lbs'>,
+  profile: UnitProfile,
 ): LiftEval {
   const inc = incrementFor(exerciseId, weight, profile)
   const met = reps.length > 0 && reps.every((r) => r >= min)
@@ -124,6 +129,7 @@ export function evaluateSession(
   log: SessionLog,
   states: Record<string, ExerciseState>,
   profile: Profile,
+  program: ProgramDef | null,
   opts: EvaluateOptions = {},
 ): EvaluateOutput {
   const now = opts.now ?? new Date().toISOString()
@@ -142,7 +148,9 @@ export function evaluateSession(
     const weight = log.weights[first.key] ?? first.weight_lbs
     const reps = keys.flatMap((k) => (log.reps[k] ?? []).map((r) => r ?? 0))
     const prev = states[exerciseId] ?? blankState(exerciseId, first.weight_lbs)
-    const ev = isLinear(first.progression_type)
+    const ev: LiftEval = first.progression_type === 'NONE'
+      ? { target_met: reps.length > 0 && reps.every((r) => r >= first.reps_min), upgrade_load: false, next_weight: weight, next_failures: 0, action: 'HOLD' }
+      : isLinear(first.progression_type)
       ? evaluateLinear(exerciseId, weight, reps, first.reps_min, prev.consecutive_failures, profile)
       : evaluateDouble(exerciseId, weight, reps, first.reps_min, first.reps_max, prev.consecutive_failures, profile)
 
@@ -181,20 +189,26 @@ export function evaluateSession(
   }
 
   const sessionMet = results.every((r) => r.target_met)
+  // Free-form workouts (no program, or not the program's day) never move gates or the rotation.
+  const onProgram = !!program && program.days.some((d) => d.id === plan.rotation_code)
   const phase = profile.current_phase
-  const def = PHASES[phase]
-  const jointBlocked = phase === 3 && opts.joint_pain === true
+  const def = onProgram ? phaseOf(program!, phase) : { gate_required: null as number | null, schedule: { type: 'FLEXIBLE' } }
+  // Phases on an every-other-day cadence ask about joint pain before counting (PPL phase 3).
+  const jointBlocked = def.schedule.type === 'EVERY_N_DAYS' && opts.joint_pain === true
   const counted = sessionMet && !jointBlocked && def.gate_required !== null
   const gateBefore = profile.phase_gate_progress
   let gateAfter = counted ? gateBefore + 1 : gateBefore
   let phaseAfter: PhaseNumber = phase
   let promoted = false
-  if (def.gate_required !== null && gateAfter >= def.gate_required) {
+  if (onProgram && def.gate_required !== null && gateAfter >= def.gate_required && program!.phases.some((p) => p.phase === phase + 1)) {
     phaseAfter = (phase + 1) as PhaseNumber
     gateAfter = 0
     promoted = true
   }
-  const nextRotation = (profile.next_rotation_index + 1) % 6
+  // Continue the rotation after whichever day was actually trained (the user may pick a different one).
+  const nextRotation = onProgram
+    ? (program!.days.findIndex((d) => d.id === plan.rotation_code) + 1) % program!.days.length
+    : profile.next_rotation_index
 
   return {
     result: {

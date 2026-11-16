@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultProfile, createSeedStates } from '../domain/defaults'
 import type { ExerciseState, Profile, SessionLog, SessionPlan } from '../domain/types'
-import { buildSessionPlan, feelerSet, prescriptionLabel } from './plan'
+import { buildSessionPlan as build, feelerSet, prescriptionLabel } from './plan'
+import { FULL_BODY_3, PPL_RAMP, PHASES } from '../domain/program'
+import { evaluateSession as evaluate } from './progression'
 import { calculatePlatesPerSide } from './plates'
-import { evaluateSession } from './progression'
 import { projectSchedule, suggestNextDate, toISODate } from './schedule'
 import { calculateWarmups } from './warmup'
 
 const NOW = '2026-11-16T12:00:00.000Z'
 
+const buildSessionPlan = (p: Profile, st: Record<string, ExerciseState>, o?: Parameters<typeof build>[3]) => build(p, st, PPL_RAMP, o)
+const evaluateSession = (...a: [SessionPlan, SessionLog, Record<string, ExerciseState>, Profile, { now?: string; joint_pain?: boolean }]) =>
+  evaluate(a[0], a[1], a[2], a[3], PPL_RAMP, a[4])
+
 function fresh() {
-  const profile = createDefaultProfile(NOW)
+  const profile: Profile = { ...createDefaultProfile(NOW), active_program_id: 'p1' }
   const states: Record<string, ExerciseState> = Object.fromEntries(createSeedStates(NOW).map((s) => [s.exercise_id, s]))
   return { profile, states }
 }
@@ -289,18 +294,18 @@ describe('progression details', () => {
 describe('schedule suggestions (resolution #7)', () => {
   const mon = new Date(2026, 10, 16)
   it('Phase 1 suggests Mon/Wed/Fri with a rest day between', () => {
-    const days = projectSchedule(1, null, mon, 6).map(toISODate)
+    const days = projectSchedule(PHASES[1].schedule, null, mon, 6).map(toISODate)
     expect(days).toEqual(['2026-11-16', '2026-11-18', '2026-11-20', '2026-11-23', '2026-11-25', '2026-11-27'])
   })
   it('a missed day shifts the queue instead of skipping a workout', () => {
     // Last session Monday, today is Thursday (missed Wed) -> Friday
-    expect(toISODate(suggestNextDate(1, '2026-11-16', new Date(2026, 10, 19)))).toBe('2026-11-20')
+    expect(toISODate(suggestNextDate(PHASES[1].schedule, '2026-11-16', new Date(2026, 10, 19)))).toBe('2026-11-20')
   })
   it('Phase 3 rolls every other day', () => {
-    expect(projectSchedule(3, '2026-11-16', mon, 3).map(toISODate)).toEqual(['2026-11-18', '2026-11-20', '2026-11-22'])
+    expect(projectSchedule(PHASES[3].schedule, '2026-11-16', mon, 3).map(toISODate)).toEqual(['2026-11-18', '2026-11-20', '2026-11-22'])
   })
   it('Phase 4 skips Sundays', () => {
-    expect(projectSchedule(4, '2026-11-20', mon, 3).map(toISODate)).toEqual(['2026-11-21', '2026-11-23', '2026-11-24'])
+    expect(projectSchedule(PHASES[4].schedule, '2026-11-20', mon, 3).map(toISODate)).toEqual(['2026-11-21', '2026-11-23', '2026-11-24'])
   })
 })
 
@@ -316,5 +321,56 @@ describe('feeler set before a second barbell compound', () => {
     expect(plan.exercises[1].warmups.map((x) => x.weight_lbs)).toEqual([80])
     const pushA = buildSessionPlan(w.profile, w.states, { rotation: 'PUSH_A' })
     expect(pushA.exercises[1].warmups).toEqual([])
+  })
+})
+
+describe('other programs and units', () => {
+  it('full-body template alternates A/B and never gates', () => {
+    let w = fresh()
+    const run2 = () => {
+      const plan = build(w.profile, w.states, FULL_BODY_3)
+      const out = evaluate(plan, logFor(plan), w.states, w.profile, FULL_BODY_3, { now: NOW })
+      w = { profile: { ...w.profile, ...out.profile }, states: out.states }
+      return { plan, out }
+    }
+    const a = run2()
+    expect(a.plan.rotation_code).toBe('FULL_A')
+    expect(a.out.result.counted_toward_gate).toBe(false)
+    const b = run2()
+    expect(b.plan.rotation_code).toBe('FULL_B')
+    expect(b.plan.exercises.map((e) => e.exercise_id)).toContain('barbell_deadlift')
+    expect(run2().plan.rotation_code).toBe('FULL_A')
+    expect(w.profile.current_phase).toBe(1)
+  })
+
+  it('uses kg jumps, bar and rounding in metric', () => {
+    const w = fresh()
+    w.profile.unit_system = 'METRIC'
+    w.profile.barbell_weight_lbs = 20
+    w.profile.dumbbell_step_lbs = 2
+    w.states.barbell_bench_press_heavy.current_working_weight_lbs = 40
+    w.states.barbell_deadlift.current_working_weight_lbs = 60
+    const r = run(w)
+    expect(r.world.states.barbell_bench_press_heavy.current_working_weight_lbs).toBe(42.5)
+    expect(r.world.states.dumbbell_overhead_press_volume.current_working_weight_lbs).toBe(25)
+    expect(calculateWarmups(60, { unit: 'METRIC', barWeight: 20 }).map((s) => s.weight_lbs)).toEqual([20, 32.5, 45, 52.5])
+    const dl = evaluate(
+      { ...build(w.profile, w.states, PPL_RAMP, { rotation: 'PULL_A' }) },
+      logFor(build(w.profile, w.states, PPL_RAMP, { rotation: 'PULL_A' })),
+      w.states,
+      w.profile,
+      PPL_RAMP,
+      { now: NOW },
+    )
+    expect(dl.states.barbell_deadlift.current_working_weight_lbs).toBe(65)
+  })
+
+  it('free-form workouts leave the rotation and gate alone', () => {
+    const w = fresh()
+    const plan = { ...buildSessionPlan(w.profile, w.states), rotation_code: 'FREE' }
+    const out = evaluate(plan, logFor(plan), w.states, w.profile, PPL_RAMP, { now: NOW })
+    expect(out.profile.next_rotation_index).toBe(0)
+    expect(out.result.counted_toward_gate).toBe(false)
+    expect(out.states.barbell_bench_press_heavy.current_working_weight_lbs).toBe(80)
   })
 })

@@ -1,31 +1,29 @@
 import type { Session } from '@supabase/supabase-js'
 import { useCallback, useEffect, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { getMeta } from './data/db'
 import { ensureSeeded } from './data/repo'
 import { getClient, isSyncConfigured, syncNow } from './data/sync'
+import { registerCustomExercises } from './domain/catalog'
+import { rulesFor } from './domain/units'
+import { ActivityView } from './ui/Activity'
+import { useActive, useCompletedSessions, useCustomExercises, useProfile, useProgram, useStates } from './ui/data'
 import { useMediaQuery } from './ui/hooks'
 import { Icon, type IconName } from './ui/Icon'
-import { PhaseHeader } from './ui/PhaseHeader'
-import { SettingsView } from './ui/Settings'
+import { Onboarding } from './ui/Onboarding'
 import { TimerDock } from './ui/TimerDock'
-import { useActive, useCompletedSessions, useProfile, useStates } from './ui/data'
-import { HistoryList, HistoryView, NutritionRoadmap, ProgressView, SessionResultView, useToast } from './ui/Views'
-import { ActiveWorkoutView, SessionPreview, UpNextList } from './ui/Workout'
-import { Welcome } from './ui/Welcome'
-import { ActivityView } from './ui/Activity'
+import { TodayView } from './ui/Today'
+import { HistoryView, ProgressView, SessionResultView, useToast } from './ui/Views'
+import { ActiveWorkoutView } from './ui/Workout'
+import { YouView } from './ui/You'
 
-type View = 'today' | 'history' | 'progress' | 'activity' | 'nutrition' | 'settings'
+type View = 'today' | 'history' | 'log' | 'progress' | 'you'
 
-const NAV: { view: View; label: string; short: string; icon: IconName; soon?: boolean }[] = [
-  { view: 'today', label: 'Today', short: 'Today', icon: 'barbell' },
-  { view: 'history', label: 'History', short: 'History', icon: 'history' },
-  { view: 'progress', label: 'Progress', short: 'Progress', icon: 'chart' },
-  { view: 'activity', label: 'Log activity', short: 'Log', icon: 'plus' },
-  { view: 'nutrition', label: 'Nutrition', short: 'Food', icon: 'leaf', soon: true },
-  { view: 'settings', label: 'Settings', short: 'More', icon: 'settings' },
+const NAV: { view: View; label: string; icon: IconName }[] = [
+  { view: 'today', label: 'Today', icon: 'barbell' },
+  { view: 'history', label: 'History', icon: 'history' },
+  { view: 'log', label: 'Log', icon: 'plus' },
+  { view: 'progress', label: 'Progress', icon: 'chart' },
+  { view: 'you', label: 'You', icon: 'user' },
 ]
-const MOBILE_TABS: View[] = ['today', 'history', 'progress', 'activity', 'nutrition', 'settings']
 
 function useSync(notify: (m: string) => void) {
   const [session, setSession] = useState<Session | null>(null)
@@ -37,9 +35,9 @@ function useSync(notify: (m: string) => void) {
       setSyncing(true)
       try {
         const r = await syncNow()
-        if (!quiet) notify(`Synced · ${r.pushed} up, ${r.pulled} down`)
+        if (!quiet) notify(r.pushed || r.pulled ? 'Synced' : 'Up to date')
       } catch (e) {
-        if (!quiet) notify(e instanceof Error ? e.message : 'Sync failed')
+        if (!quiet) notify(e instanceof Error ? e.message : "Couldn't sync")
       } finally {
         setSyncing(false)
       }
@@ -57,19 +55,21 @@ function useSync(notify: (m: string) => void) {
       void c.auth.getSession().then(({ data }) => setSession(data.session))
       const { data } = c.auth.onAuthStateChange((evt, s) => {
         setSession(s)
-        if (evt === 'SIGNED_IN') setTimeout(() => void run(), 0)
+        if (evt === 'SIGNED_IN') setTimeout(() => void run(true), 0)
       })
       unsub = () => data.subscription.unsubscribe()
     })
     const onOnline = () => void run(true)
+    const onVisible = () => document.visibilityState === 'visible' && void run(true)
     window.addEventListener('online', onOnline)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       cancelled = true
       unsub?.()
       window.removeEventListener('online', onOnline)
+      document.removeEventListener('visibilitychange', onVisible)
     }
-    // Re-subscribe when the project is (dis)connected from Settings.
-  }, [run, session?.user.id])
+  }, [run])
 
   return { session, syncing, sync: run }
 }
@@ -79,8 +79,8 @@ export default function App() {
   const [view, setView] = useState<View>('today')
   const [summaryId, setSummaryId] = useState<string | null>(null)
   const [historyId, setHistoryId] = useState<string | null>(null)
-  const desktop = useMediaQuery('(min-width: 1100px)')
-  const tablet = useMediaQuery('(min-width: 768px)')
+  const [openDay, setOpenDay] = useState<string | null>(null)
+  const wide = useMediaQuery('(min-width: 900px)')
   const { toast, show } = useToast()
   const { session, syncing, sync } = useSync(show)
 
@@ -95,12 +95,32 @@ export default function App() {
   const states = useStates()
   const active = useActive()
   const sessions = useCompletedSessions()
-  const onboarded = useLiveQuery(async () => (await getMeta<boolean>('onboarded')) ?? false, [])
+  const program = useProgram(profile?.active_program_id)
+  const custom = useCustomExercises()
+  useEffect(() => {
+    if (custom) registerCustomExercises(custom.map((c) => c.definition))
+  }, [custom])
+  const clearOpenDay = useCallback(() => setOpenDay(null), [])
 
-  if (!ready || !profile || !states || active === undefined || !sessions || onboarded === undefined) return null
-  const needsWelcome = !onboarded && sessions.length === 0 && !active
+  if (!ready || !profile || !states || active === undefined || !sessions || program === undefined) return null
 
+  if (!profile.onboarded && !active) {
+    return (
+      <>
+        <Onboarding notify={show} />
+        {toast}
+      </>
+    )
+  }
+
+  const unit = rulesFor(profile.unit_system).label
   const summary = summaryId ? sessions.find((s) => s.id === summaryId) : undefined
+
+  const go = (v: View) => {
+    setView(v)
+    if (v !== 'history') setHistoryId(null)
+    document.querySelector('.stage-scroll')?.scrollTo({ top: 0 })
+  }
 
   const content = (() => {
     switch (view) {
@@ -109,20 +129,21 @@ export default function App() {
           return (
             <SessionResultView
               session={summary}
+              program={program}
+              unit={unit}
               onDone={() => setSummaryId(null)}
               onFinisher={() => {
                 setSummaryId(null)
-                go('activity')
+                go('log')
               }}
             />
           )
-        if (needsWelcome)
-          return <Welcome profile={profile} states={states} canRestore={isSyncConfigured() && !session} onRestore={() => go('settings')} />
         if (active)
           return (
             <ActiveWorkoutView
               active={active}
               profile={profile}
+              program={program}
               onFinished={(id) => {
                 setSummaryId(id)
                 if (session) void sync(true)
@@ -130,23 +151,21 @@ export default function App() {
             />
           )
         return (
-          <>
-            <SessionPreview profile={profile} states={states} sessions={sessions} />
-            {!desktop && (
-              <>
-                <div className="section-title"><h2>Up next</h2><span className="tiny faint">Order is fixed · dates are suggestions</span></div>
-                <div className="card" style={{ overflow: 'hidden' }}>
-                  <UpNextList profile={profile} sessions={sessions} live={!!active} />
-                </div>
-              </>
-            )}
-          </>
+          <TodayView
+            profile={profile}
+            states={states}
+            program={program}
+            sessions={sessions}
+            onEditDay={(id) => {
+              setOpenDay(id)
+              go('you')
+            }}
+            onLogActivity={() => go('log')}
+          />
         )
       case 'history':
-        return <HistoryView sessions={sessions} selected={historyId} onSelect={setHistoryId} />
-      case 'progress':
-        return <ProgressView profile={profile} states={states} />
-      case 'activity':
+        return <HistoryView sessions={sessions} selected={historyId} onSelect={setHistoryId} program={program} unit={unit} />
+      case 'log':
         return (
           <ActivityView
             onSaved={(id) => {
@@ -156,22 +175,27 @@ export default function App() {
             }}
           />
         )
-      case 'nutrition':
-        return <NutritionRoadmap profile={profile} />
-      case 'settings':
-        return <SettingsView profile={profile} states={states} session={session} syncing={syncing} onSync={() => void sync()} notify={show} />
+      case 'progress':
+        return <ProgressView profile={profile} states={states} program={program} />
+      case 'you':
+        return (
+          <YouView
+            profile={profile}
+            states={states}
+            program={program}
+            session={session}
+            syncing={syncing}
+            onSync={() => void sync()}
+            notify={show}
+            openDay={openDay}
+            onOpenedDay={clearOpenDay}
+          />
+        )
     }
   })()
 
-  const go = (v: View) => {
-    setView(v)
-    if (v !== 'history') setHistoryId(null)
-    document.querySelector('.stage-scroll')?.scrollTo({ top: 0 })
-  }
-
   const stage = (
     <main className="stage">
-      <PhaseHeader profile={profile} compact={!tablet} />
       <div className="stage-scroll">
         <div className="stage-inner">{content}</div>
       </div>
@@ -179,20 +203,17 @@ export default function App() {
     </main>
   )
 
-  if (!tablet) {
+  if (!wide) {
     return (
       <div className="mobile">
         {stage}
         <nav className="tabbar" aria-label="Main">
-          {MOBILE_TABS.map((v) => {
-            const n = NAV.find((x) => x.view === v)!
-            return (
-              <button key={v} className="tab" aria-current={view === v ? 'page' : undefined} onClick={() => go(v)}>
-                <Icon name={n.icon} size={22} />
-                {n.short}
-              </button>
-            )
-          })}
+          {NAV.map((n) => (
+            <button key={n.view} className="tab" aria-current={view === n.view ? 'page' : undefined} onClick={() => go(n.view)}>
+              <Icon name={n.icon} size={24} />
+              {n.view === 'today' && active ? 'Workout' : n.label}
+            </button>
+          ))}
         </nav>
         {toast}
       </div>
@@ -200,55 +221,23 @@ export default function App() {
   }
 
   return (
-    <div className={`shell${desktop ? '' : ' no-stream'}`}>
+    <div className="shell">
       <nav className="rail" aria-label="Main">
         <div className="brand">
-          <span className="brand-mark"><Icon name="barbell" size={16} /></span>
-          PPL Ramp
+          <span className="brand-mark"><Icon name="barbell" size={17} /></span>
+          {profile.display_name ? `${profile.display_name}'s training` : 'Training'}
         </div>
         {NAV.map((n) => (
           <button key={n.view} className="rail-item" aria-current={view === n.view ? 'page' : undefined} onClick={() => go(n.view)}>
             <Icon name={n.icon} />
-            {n.label}
-            {n.soon && <span className="chip" style={{ marginLeft: 'auto', height: 18, fontSize: 10 }}>Soon</span>}
-            {n.view === 'today' && active && <span className="chip accent" style={{ marginLeft: 'auto', height: 18, fontSize: 10 }}>Live</span>}
+            {n.view === 'today' && active ? 'Workout' : n.view === 'log' ? 'Log activity' : n.label}
           </button>
         ))}
-        <div className="rail-foot">
-          <button className="row small muted" onClick={() => go('settings')}>
-            <Icon name={session ? 'cloud' : 'cloudOff'} size={16} />
-            {session ? (syncing ? 'Syncing…' : 'Synced to cloud') : 'On this device only'}
-          </button>
+        <div className="rail-foot row">
+          <Icon name={session ? 'cloud' : 'cloudOff'} size={16} />
+          {session ? (syncing ? 'Syncing…' : 'Backed up') : 'On this device only'}
         </div>
       </nav>
-
-      {desktop && (
-        <aside className="stream" aria-label="Queue and history">
-          <div className="stream-head">
-            <div className="eyebrow">Hi {profile.display_name}</div>
-            <div style={{ fontWeight: 650, fontSize: 17, marginTop: 2 }}>Training queue</div>
-          </div>
-          <div className="stream-body">
-            <div className="stream-group spread">
-              <span className="eyebrow">Up next</span>
-              <span className="tiny faint">dates are suggestions</span>
-            </div>
-            <UpNextList profile={profile} sessions={sessions} live={!!active} />
-            <div className="stream-group" style={{ marginTop: 10 }}>
-              <span className="eyebrow">Completed · {sessions.length}</span>
-            </div>
-            <HistoryList
-              sessions={sessions}
-              selected={view === 'history' ? historyId : null}
-              onSelect={(id) => {
-                setView('history')
-                setHistoryId(id)
-              }}
-            />
-          </div>
-        </aside>
-      )}
-
       {stage}
       {toast}
     </div>

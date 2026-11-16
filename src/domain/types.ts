@@ -41,9 +41,16 @@ export interface ExerciseDef {
 
 // ─── Program ────────────────────────────────────────────────────────────────
 
-export type RotationCode = 'PUSH_A' | 'PULL_A' | 'LEGS_A' | 'PUSH_B' | 'PULL_B' | 'LEGS_B'
-export type PhaseNumber = 1 | 2 | 3 | 4
-export type ScheduleType = 'FIXED_WEEKLY' | 'ROLLING_EVERY_OTHER_DAY' | 'SIX_DAY_SPLIT'
+/** A training day inside a program (e.g. "PUSH_A", "DAY_1"). */
+export type RotationCode = string
+export type PhaseNumber = number
+
+/** When sessions are suggested. The day order is always the program's rotation. */
+export type ScheduleRule =
+  | { type: 'WEEKDAYS'; days: number[] } // 0 = Sunday
+  | { type: 'EVERY_N_DAYS'; n: number }
+  | { type: 'DAILY_EXCEPT'; off: number[] }
+  | { type: 'FLEXIBLE' }
 
 export interface PrescribedExercise {
   exercise_id: string
@@ -62,13 +69,34 @@ export interface PhaseDef {
   name: string
   short_name: string
   summary: string
-  schedule_type: ScheduleType
+  schedule: ScheduleRule
   days_per_week: number
   target_duration_minutes: number
   /** Sessions that must count toward the gate before promotion. null = final phase. */
   gate_required: number | null
   amrap_enabled: boolean
   workouts: Record<RotationCode, PrescribedExercise[]>
+}
+
+export interface ProgramDay {
+  id: RotationCode
+  name: string
+  focus: string
+}
+
+/** A complete, editable training program. Templates are copied into the user's own program. */
+export interface ProgramDef {
+  id: string
+  template_id: string | null
+  name: string
+  tagline: string
+  icon: string
+  /** Rotation order. */
+  days: ProgramDay[]
+  /** At least one. Programs without gates have a single phase with gate_required = null. */
+  phases: PhaseDef[]
+  /** Optional warm-up checklist per day. */
+  readiness?: Record<RotationCode, ReadinessItem[]>
 }
 
 // ─── User state ─────────────────────────────────────────────────────────────
@@ -81,15 +109,21 @@ interface Syncable {
   dirty?: 0 | 1
 }
 
+export type EquipmentPreset = 'GYM' | 'HOME' | 'NONE'
+
 export interface Profile extends Syncable {
   id: 'me'
   display_name: string
+  /** All stored weights (the *_lbs fields included) are in this unit. */
   unit_system: UnitSystem
+  equipment_preset: EquipmentPreset
+  onboarded: boolean
   barbell_weight_lbs: number
   /** Plates available per side, heaviest first. */
   plates_lbs: number[]
   dumbbell_step_lbs: number
-  active_program_id: string
+  /** The user's program (a row in `programs`), or null for "just track". */
+  active_program_id: string | null
   current_phase: PhaseNumber
   phase_gate_progress: number
   next_rotation_index: number
@@ -175,6 +209,17 @@ export interface WorkoutEntry extends Syncable {
   // Evaluation
   target_met: boolean | null
   completed_at: string | null
+}
+
+export interface UserProgram extends Syncable {
+  id: string
+  definition: ProgramDef
+  created_at: string
+}
+
+export interface CustomExercise extends Syncable {
+  id: string
+  definition: ExerciseDef
 }
 
 // ─── Nutrition (step 3 — schema ready, UI pending) ──────────────────────────

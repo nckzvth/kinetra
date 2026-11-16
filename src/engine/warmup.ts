@@ -1,15 +1,9 @@
-import type { PlannedWarmup } from '../domain/types'
+import type { PlannedWarmup, UnitSystem } from '../domain/types'
+import { roundToStep, rulesFor } from '../domain/units'
 
 export const roundTo5 = (x: number, floor = 45) => Math.max(floor, Math.round(x / 5) * 5)
 
-/** Minimum jump between consecutive ramp sets, and minimum gap below the working weight. */
-const MIN_STEP = 10
-
-const RAMP = [
-  { pct: 0.55, minWorking: 60 },
-  { pct: 0.75, minWorking: 70 },
-  { pct: 0.88, minWorking: 135 },
-]
+const RAMP = [0.55, 0.75, 0.88]
 const REPS_BY_POSITION = [
   { reps: 5, label: '5', rest: 60 },
   { reps: 3, label: '3', rest: 75 },
@@ -17,39 +11,39 @@ const REPS_BY_POSITION = [
 ]
 
 /**
- * Barbell ramp-up for the first primary lift of the day (resolution #1).
+ * Barbell ramp-up before the day's main lift.
  *
  * Starts with the empty bar, then tries ~55% / ~75% / ~88% of the working weight
- * (rounded to 5 lb, never under the bar). A ramp set is kept only if it is at least
- * 10 lb heavier than the previous warmup and at least 10 lb under the working weight,
- * so no set ever duplicates the bar or the working weight. Reps follow position:
- * the first loaded set gets 5, the next 3, the last 1–2.
+ * (rounded to the unit's step, never under the bar). A ramp set is kept only if it is
+ * clearly heavier than the previous warmup and clearly under the working weight, so no
+ * set duplicates the bar or the working weight. Reps follow position: 5, then 3, then 1–2.
  */
 export function calculateWarmups(
   workingWeight: number,
-  opts: { barWeight?: number; exerciseId?: string } = {},
+  opts: { barWeight?: number; exerciseId?: string; unit?: UnitSystem } = {},
 ): PlannedWarmup[] {
-  const bar = opts.barWeight ?? 45
+  const r = rulesFor(opts.unit ?? 'IMPERIAL')
+  const bar = opts.barWeight ?? r.bar
   const isDeadlift = opts.exerciseId === 'barbell_deadlift'
   const isSquat = opts.exerciseId === 'barbell_back_squat'
-  const barReps = isSquat ? 10 : 8
+  const rdlBelow = opts.unit === 'METRIC' ? 60 : 135
   const sets: PlannedWarmup[] = [
     {
       weight_lbs: bar,
-      reps: barReps,
+      reps: isSquat ? 10 : 8,
       reps_label: isSquat ? '10' : '8–10',
       rest_sec: 45,
-      note: isDeadlift && workingWeight < 135 ? 'Empty bar as RDL from rack / blocks' : 'Empty bar groove',
+      note: isDeadlift && workingWeight < rdlBelow ? 'Empty bar as RDL from rack / blocks' : 'Empty bar groove',
     },
   ]
   let prev = bar
-  for (const step of RAMP) {
-    if (workingWeight < step.minWorking) continue
-    const w = roundTo5(workingWeight * step.pct, bar)
-    if (w < prev + MIN_STEP || w > workingWeight - MIN_STEP) continue
+  RAMP.forEach((pct, i) => {
+    if (workingWeight < r.rampThresholds[i]) return
+    const w = roundToStep(workingWeight * pct, r.round, bar)
+    if (w < prev + r.rampMinStep || w > workingWeight - r.rampMinStep) return
     const pos = REPS_BY_POSITION[sets.length - 1]
     sets.push({ weight_lbs: w, reps: pos.reps, reps_label: pos.label, rest_sec: pos.rest })
     prev = w
-  }
+  })
   return sets
 }

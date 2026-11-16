@@ -1,9 +1,10 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
 import { db } from '../data/db'
-import { EXERCISE_BY_ID, PRIMARY_LIFT_IDS } from '../domain/catalog'
-import { PHASES } from '../domain/program'
-import type { ExerciseResult, ExerciseState, PhaseNumber, Profile, WorkoutSession } from '../domain/types'
+import { getExercise, PRIMARY_LIFT_IDS } from '../domain/catalog'
+import { phaseOf } from '../domain/program'
+import { rulesFor } from '../domain/units'
+import type { ExerciseResult, ExerciseState, Profile, ProgramDef, WorkoutSession } from '../domain/types'
 import { fmtDuration, fmtWeight } from './hooks'
 import { Icon, type IconName } from './Icon'
 import { ActivityDetail } from './Activity'
@@ -12,17 +13,29 @@ import { ActivityDetail } from './Activity'
 
 const ACTION_CHIP: Record<ExerciseResult['action'], { cls: string; label: (r: ExerciseResult) => string; icon: IconName }> = {
   INCREASE: { cls: 'accent', label: (r) => `+${fmtWeight(r.next_weight_lbs - r.weight_used_lbs)}`, icon: 'arrowUp' },
-  HOLD: { cls: '', label: (r) => (r.target_met ? 'Hold' : `Repeat · miss ${r.consecutive_failures}`), icon: 'equal' },
-  DELOAD: { cls: 'warn', label: () => 'Deload 10%', icon: 'arrowDown' },
-  DECREASE: { cls: 'warn', label: () => 'Step down', icon: 'arrowDown' },
+  HOLD: { cls: '', label: (r) => (r.target_met ? 'Same' : 'Try again'), icon: 'equal' },
+  DELOAD: { cls: 'warn', label: () => 'Down 10%', icon: 'arrowDown' },
+  DECREASE: { cls: 'warn', label: () => 'Lighter', icon: 'arrowDown' },
 }
 
-export function SessionResultView({ session, onDone, onFinisher }: { session: WorkoutSession; onDone?: () => void; onFinisher?: () => void }) {
+export function SessionResultView({
+  session,
+  program,
+  unit = 'lb',
+  onDone,
+  onFinisher,
+}: {
+  session: WorkoutSession
+  program?: ProgramDef | null
+  unit?: string
+  onDone?: () => void
+  onFinisher?: () => void
+}) {
   const r = session.result_json
   if (session.rotation_code === 'CUSTOM') return <ActivityDetail session={session} />
   if (!r) return <div className="empty">No result recorded for this session.</div>
   const missed = r.exercises.filter((e) => !e.target_met)
-  const nextPhase = PHASES[r.phase_after]
+  const nextPhase = program ? phaseOf(program, r.phase_after) : null
 
   return (
     <>
@@ -31,44 +44,36 @@ export function SessionResultView({ session, onDone, onFinisher }: { session: Wo
           <div className="row" style={{ gap: 10 }}>
             <Icon name="trophy" size={22} />
             <div>
-              <div style={{ fontWeight: 750, fontSize: 18 }}>Gate cleared — welcome to Phase {r.phase_after}</div>
-              <div className="small" style={{ opacity: 0.85 }}>{nextPhase.summary}</div>
+              <div style={{ fontWeight: 750, fontSize: 18 }}>Phase {r.phase_after} unlocked</div>
+              {nextPhase && <div className="small" style={{ opacity: 0.85 }}>{nextPhase.summary}</div>}
             </div>
           </div>
         </div>
       )}
       <div className="card card-pad">
         <div className="eyebrow">
-          {new Date(session.started_at).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} · Phase {r.phase_before} · {fmtDuration(session.duration_seconds)}
+          {new Date(session.started_at).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} · {fmtDuration(session.duration_seconds)}
         </div>
         <h1 className="page-title" style={{ marginTop: 4 }}>{session.title}</h1>
-        <div className="row" style={{ marginTop: 14, gap: 24, alignItems: 'flex-end' }}>
-          <div>
-            <div className="big-stat num">
-              {r.counted_toward_gate ? '+1' : '+0'}
+        <p className="small" style={{ marginTop: 10, fontWeight: 500, color: r.session_target_met && !r.gate_blocked_by_joint_pain ? 'var(--accent-text)' : 'var(--warn-text)' }}>
+          {r.gate_blocked_by_joint_pain
+            ? "You hit every rep, but reported joint pain, so this one doesn't count toward the next phase."
+            : r.session_target_met
+              ? 'You hit every rep.'
+              : `${missed.length} exercise${missed.length === 1 ? '' : 's'} came up short. That's normal — you'll repeat the weight next time.`}
+        </p>
+        {r.gate_required !== null && !r.promoted && (
+          <>
+            <div className="spread small" style={{ marginTop: 14 }}>
+              <span className="muted">{r.counted_toward_gate ? 'Counts toward' : "Doesn't count toward"} phase {r.phase_before + 1}</span>
+              <span className="num" style={{ fontWeight: 600 }}>{r.gate_after} of {r.gate_required}</span>
             </div>
-            <div className="small muted">gate progress</div>
-          </div>
-          <div className="grow small" style={{ paddingBottom: 2 }}>
-            {r.counted_toward_gate ? (
-              <span style={{ color: 'var(--accent-text)', fontWeight: 600 }}>Every target met.</span>
-            ) : r.gate_blocked_by_joint_pain ? (
-              <span style={{ color: 'var(--warn-text)', fontWeight: 600 }}>Targets met, but joint pain was reported, so Phase 3 pauses this one.</span>
-            ) : r.gate_required === null ? (
-              <span className="muted">Phase 4 has no gate — progression only.</span>
-            ) : (
-              <span style={{ color: 'var(--warn-text)', fontWeight: 600 }}>
-                Paused, not reset — {missed.length} exercise{missed.length === 1 ? '' : 's'} below minimum.
-              </span>
-            )}
-            {r.gate_required !== null && !r.promoted && (
-              <div className="muted num">{r.gate_after} / {r.gate_required} toward Phase {r.phase_before + 1}</div>
-            )}
-          </div>
-        </div>
+            <div className="progress"><div style={{ width: `${(r.gate_after / r.gate_required) * 100}%` }} /></div>
+          </>
+        )}
       </div>
 
-      <div className="section-title"><h2>Next exposure</h2></div>
+      <div className="section-title"><h2>Next time</h2></div>
       <div className="card list">
         {r.exercises.map((e) => {
           const chip = ACTION_CHIP[e.action]
@@ -81,7 +86,7 @@ export function SessionResultView({ session, onDone, onFinisher }: { session: Wo
                 <div className="reps-inline">{e.reps.join(' · ')} <span className="faint">@ {fmtWeight(e.weight_used_lbs)}</span></div>
               </div>
               <div className="num" style={{ textAlign: 'right' }}>
-                <div style={{ fontWeight: 650 }}>{fmtWeight(e.next_weight_lbs)} lb</div>
+                <div style={{ fontWeight: 650 }}>{fmtWeight(e.next_weight_lbs)} {unit}</div>
                 <span className={`chip ${chip.cls}`}><Icon name={chip.icon} size={11} /> {chip.label(e)}</span>
               </div>
             </div>
@@ -134,13 +139,25 @@ export function HistoryList({ sessions, selected, onSelect }: { sessions: Workou
   )
 }
 
-export function HistoryView({ sessions, selected, onSelect }: { sessions: WorkoutSession[]; selected: string | null; onSelect: (id: string | null) => void }) {
+export function HistoryView({
+  sessions,
+  selected,
+  onSelect,
+  program,
+  unit,
+}: {
+  sessions: WorkoutSession[]
+  selected: string | null
+  onSelect: (id: string | null) => void
+  program: ProgramDef | null
+  unit: string
+}) {
   const s = sessions.find((x) => x.id === selected)
   if (s) {
     return (
       <>
-        <button className="btn sm ghost" style={{ marginBottom: 10, marginLeft: -12 }} onClick={() => onSelect(null)}>← All workouts</button>
-        <SessionResultView session={s} />
+        <button className="back-btn" onClick={() => onSelect(null)}><Icon name="chevronLeft" size={24} /> History</button>
+        <SessionResultView session={s} program={program} unit={unit} />
       </>
     )
   }
@@ -157,7 +174,7 @@ export function HistoryView({ sessions, selected, onSelect }: { sessions: Workou
 // ─── Progress ───────────────────────────────────────────────────────────────
 
 function Sparkline({ points }: { points: number[] }) {
-  if (points.length < 2) return <div className="tiny faint" style={{ height: 36, display: 'grid', placeItems: 'center' }}>Needs 2+ sessions</div>
+  if (points.length < 2) return <div className="tiny faint" style={{ height: 36, display: 'grid', placeItems: 'center' }}>After 2 workouts</div>
   const w = 160
   const h = 36
   const min = Math.min(...points)
@@ -173,9 +190,23 @@ function Sparkline({ points }: { points: number[] }) {
   )
 }
 
-export function ProgressView({ profile, states }: { profile: Profile; states: Record<string, ExerciseState> }) {
+export function ProgressView({ profile, states, program }: { profile: Profile; states: Record<string, ExerciseState>; program: ProgramDef | null }) {
+  const unit = rulesFor(profile.unit_system).label
+  // Lifts worth charting: the program's main lifts, else anything with an e1RM.
+  const lifts = (() => {
+    const fromProgram = program
+      ? [...new Set(program.phases.flatMap((ph) => Object.values(ph.workouts).flat().map((p) => p.exercise_id)))].filter((id) => {
+          const t = getExercise(id).progression_type
+          return t === 'LINEAR' || t === 'LINEAR_DEADLIFT'
+        })
+      : []
+    const withData = Object.values(states).filter((s) => s.best_e1rm_lbs).sort((a, b) => (b.best_e1rm_lbs ?? 0) - (a.best_e1rm_lbs ?? 0)).map((s) => s.exercise_id)
+    const ids = fromProgram.length ? fromProgram : withData.length ? withData.slice(0, 6) : [...PRIMARY_LIFT_IDS]
+    return ids
+  })()
+
   const curves = useLiveQuery(async () => {
-    const entries = await db.entries.where('exercise_id').anyOf([...PRIMARY_LIFT_IDS]).toArray()
+    const entries = await db.entries.where('exercise_id').anyOf(lifts).toArray()
     const bySession = new Map<string, { at: string; ex: string; e: number }>()
     for (const e of entries) {
       if (e.set_type === 'WARMUP' || !e.e1rm_lbs || !e.completed_at) continue
@@ -186,59 +217,63 @@ export function ProgressView({ profile, states }: { profile: Profile; states: Re
     const out: Record<string, number[]> = {}
     for (const v of [...bySession.values()].sort((a, b) => a.at.localeCompare(b.at))) (out[v.ex] ??= []).push(v.e)
     return out
-  }, [])
+  }, [lifts.join(',')])
 
   const phase = profile.current_phase
   return (
     <>
-      <h1 className="page-title" style={{ marginBottom: 14 }}>Progress</h1>
-      <div className="section-title"><h2>Program roadmap</h2></div>
-      <div className="phase-track">
-        {([1, 2, 3, 4] as PhaseNumber[]).map((p) => {
-          const def = PHASES[p]
-          const cls = p < phase ? 'done' : p === phase ? 'current' : ''
-          return (
-            <div key={p} className={`phase-step ${cls}`}>
-              <div className="eyebrow">Phase {p}</div>
-              <div style={{ fontWeight: 650, marginTop: 2 }}>{def.short_name}</div>
-              <div className="tiny muted" style={{ marginTop: 4 }}>
-                {def.days_per_week}×/wk · {def.gate_required ? `${def.gate_required} sessions` : 'ongoing'}
-              </div>
-              {p === phase && def.gate_required && (
-                <div className="tiny num" style={{ marginTop: 6, fontWeight: 600, color: 'var(--accent-text)' }}>
-                  {profile.phase_gate_progress} / {def.gate_required}
+      <h1 className="page-title">Progress</h1>
+      {program && program.phases.length > 1 && (
+        <>
+          <div className="section-title"><h2>{program.name}</h2></div>
+          <div className="phase-track">
+            {program.phases.map((def) => {
+              const p = def.phase
+              const cls = p < phase ? 'done' : p === phase ? 'current' : ''
+              return (
+                <div key={p} className={`phase-step ${cls}`}>
+                  <div className="eyebrow">Phase {p}</div>
+                  <div style={{ fontWeight: 650, marginTop: 2 }}>{def.short_name}</div>
+                  <div className="tiny muted" style={{ marginTop: 4 }}>
+                    {def.schedule.type === 'EVERY_N_DAYS' ? 'Every other day' : `${def.days_per_week} days a week`}{def.gate_required ? ` · ${def.gate_required} workouts` : ''}
+                  </div>
+                  {p === phase && def.gate_required && (
+                    <div className="tiny num" style={{ marginTop: 6, fontWeight: 600, color: 'var(--accent-text)' }}>
+                      {profile.phase_gate_progress} of {def.gate_required} done
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-      <p className="small muted" style={{ marginTop: 10 }}>{PHASES[phase].summary}</p>
+              )
+            })}
+          </div>
+          <p className="small muted" style={{ margin: '10px 4px 0' }}>{phaseOf(program, phase).summary}</p>
+        </>
+      )}
 
-      <div className="section-title"><h2>Main lifts · estimated 1RM</h2></div>
+      <div className="section-title"><h2>Strength</h2><span className="tiny muted">Estimated 1-rep max</span></div>
       <div className="card list">
-        {PRIMARY_LIFT_IDS.map((id) => {
+        {lifts.map((id) => {
           const s = states[id]
           const pts = curves?.[id] ?? []
           return (
             <div key={id} className="result-row">
-              <div style={{ width: '38%', minWidth: 0 }}>
-                <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{EXERCISE_BY_ID[id].name}</div>
-                <div className="tiny faint num">
-                  Working {fmtWeight(s?.current_working_weight_lbs ?? 0)} lb
-                  {s?.consecutive_failures ? <span style={{ color: 'var(--warn-text)' }}> · miss {s.consecutive_failures}</span> : null}
+              <div style={{ width: '40%', minWidth: 0 }}>
+                <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getExercise(id).name}</div>
+                <div className="tiny muted num">
+                  {s ? `Working ${fmtWeight(s.current_working_weight_lbs)} ${unit}` : 'Not started'}
+                  {s?.consecutive_failures ? <span style={{ color: 'var(--warn-text)' }}> · missed last time</span> : null}
                 </div>
               </div>
               <div className="grow"><Sparkline points={pts} /></div>
-              <div className="num" style={{ textAlign: 'right', width: 64 }}>
-                <div style={{ fontWeight: 650 }}>{s?.best_e1rm_lbs ? Math.round(s.best_e1rm_lbs) : '—'}</div>
-                <div className="tiny faint">best e1RM</div>
+              <div className="num" style={{ textAlign: 'right', width: 60 }}>
+                <div style={{ fontWeight: 700, fontSize: 19 }}>{s?.best_e1rm_lbs ? Math.round(s.best_e1rm_lbs) : '—'}</div>
+                <div className="tiny muted">{unit}</div>
               </div>
             </div>
           )
         })}
       </div>
-      <p className="tiny faint" style={{ marginTop: 8 }}>Epley: weight × (1 + reps/30), sets of 1–12 reps.</p>
+      <p className="group-footer">Estimated from your best set each session (sets of 1–12 reps).</p>
     </>
   )
 }

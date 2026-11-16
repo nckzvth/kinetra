@@ -109,7 +109,11 @@ function toLocal(local: string, row: Record<string, unknown>): Row {
   const out = { ...rest, dirty: 0 } as Row
   // Postgres returns "+00:00" offsets; normalise so local string compares stay valid.
   out.updated_at = new Date(out.updated_at).toISOString()
-  if (local === 'profile') out.id = 'me'
+  if (local === 'profile') {
+    out.id = 'me'
+    out.equipment_preset ??= 'GYM'
+    out.onboarded ??= false
+  }
   return out
 }
 
@@ -175,7 +179,7 @@ async function doSync(): Promise<SyncReport> {
     const dirty = await table.where('dirty').equals(1).toArray()
     for (let i = 0; i < dirty.length; i += 500) {
       const chunk = dirty.slice(i, i + 500)
-      const onConflict = t.local === 'exercise_states' ? 'user_id,exercise_id' : 'id'
+      const onConflict = t.local === 'exercise_states' ? 'user_id,exercise_id' : t.local === 'custom_exercises' ? 'user_id,id' : 'id'
       const { error } = await c.from(t.remote).upsert(chunk.map((r) => toRemote(t.local, r, uid)), { onConflict })
       if (error) throw new Error(`${t.remote}: ${error.message}`)
       await db.transaction('rw', table, async () => {

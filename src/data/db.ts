@@ -1,11 +1,13 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
+  CustomExercise,
   ExerciseState,
   NutritionLog,
   NutritionRecipe,
   Profile,
   SessionLog,
   SessionPlan,
+  UserProgram,
   WorkoutEntry,
   WorkoutSession,
 } from '../domain/types'
@@ -35,6 +37,8 @@ export class AppDB extends Dexie {
   entries!: EntityTable<WorkoutEntry, 'id'>
   recipes!: EntityTable<NutritionRecipe, 'id'>
   nutrition_logs!: EntityTable<NutritionLog, 'id'>
+  programs!: EntityTable<UserProgram, 'id'>
+  custom_exercises!: EntityTable<CustomExercise, 'id'>
   active!: EntityTable<ActiveWorkout, 'id'>
   meta!: EntityTable<MetaRow, 'key'>
 
@@ -50,6 +54,18 @@ export class AppDB extends Dexie {
       active: 'id',
       meta: 'key',
     })
+    this.version(2)
+      .stores({ programs: 'id, dirty', custom_exercises: 'id, dirty' })
+      .upgrade(async (tx) => {
+        // Profiles from the first release predate onboarding and editable programs.
+        const sessions = await tx.table('sessions').count()
+        await tx.table('profile').toCollection().modify((p: Record<string, unknown>) => {
+          p.equipment_preset ??= 'GYM'
+          p.onboarded = sessions > 0
+          if (typeof p.active_program_id === 'string' && !String(p.active_program_id).match(/^[0-9a-f-]{36}$/)) p.active_program_id = null
+          if (p.display_name === 'Lifter') p.display_name = ''
+        })
+      })
   }
 }
 
@@ -61,6 +77,8 @@ export const SYNC_TABLES = [
   { local: 'exercise_states', remote: 'user_exercise_states', key: 'exercise_id' },
   { local: 'sessions', remote: 'workout_sessions', key: 'id' },
   { local: 'entries', remote: 'workout_entries', key: 'id' },
+  { local: 'programs', remote: 'user_programs', key: 'id' },
+  { local: 'custom_exercises', remote: 'custom_exercises', key: 'id' },
   { local: 'recipes', remote: 'nutrition_recipes', key: 'id' },
   { local: 'nutrition_logs', remote: 'nutrition_logs', key: 'id' },
 ] as const

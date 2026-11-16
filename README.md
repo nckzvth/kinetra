@@ -1,18 +1,20 @@
 # PPL Ramp
 
 A training, multi-activity and nutrition app built around a gated Metallicadpa PPL ramp-up. It's an installable web app (PWA) that
-works offline, with optional Supabase sync. See [SETUP.md](SETUP.md) to run it and to connect sync.
+works offline, with optional Supabase sync. Programs are data: pick a template, build your own, or just track. See [SETUP.md](SETUP.md) to run it and to connect sync.
 
 ## Status
 
 | Release | Scope | State |
 | --- | --- | --- |
-| 1 | Lifting engine, gated phases 1–4, tap-to-log workouts, warmup ramp + feeler sets, plate calculator, rest timer, history, e1RM progress, first-run setup, Supabase sync, hosted PWA | **Built** · live at https://ppl-ramp.netlify.app |
-| 2 | Log Activity: distance/pace (stopwatch + laps or manual), rounds & bell timer, climbing (V / YDS), timed holds, bodyweight reps | **Built** |
+| 1 | Lifting engine, phase gates, tap-to-log workouts, warm-ups, plate calculator, rest timer, history, progress, Supabase sync | **Built** |
+| 1.5 | Redesign: 3-step setup, editable programs (templates, build your own, just track), custom exercises, kg support, iOS-style UI | **Built** · live at https://nckzvth.github.io/ppl-ramp/ |
+| 2 | Log activity: distance/pace, rounds and bell timer, climbing, timed holds, bodyweight | **Built** |
 | 3 | Nutrition: macro ledger, training-day scaling, recipe batches, fridge servings, food search | Schema and sync ready; UI next |
-| 4 | Analytics, Cmd+K quick log, kg support, CSV export, accessibility pass, sync tests | Planned |
+| 4 | Analytics, quick-log command bar, CSV export, accessibility pass, sync tests | Planned |
 
-Supabase project: `ppl-ramp` (`blcznhzmiamnpmxrboue`, us-east-1). Netlify site: `ppl-ramp`.
+Deploys: every push to `main` runs tests and publishes to GitHub Pages (`.github/workflows/deploy.yml`).
+Supabase project: `ppl-ramp` (`blcznhzmiamnpmxrboue`, us-east-1).
 
 ## Layout
 

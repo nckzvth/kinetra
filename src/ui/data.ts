@@ -27,3 +27,11 @@ export function useCompletedSessions() {
 export function useSessionEntries(sessionId: string | null) {
   return useLiveQuery(async () => (sessionId ? db.entries.where('session_id').equals(sessionId).toArray() : []), [sessionId])
 }
+
+export function useProgram(id: string | null | undefined) {
+  return useLiveQuery(async () => (id ? ((await db.programs.get(id))?.definition ?? null) : null), [id])
+}
+
+export function useCustomExercises() {
+  return useLiveQuery(() => db.custom_exercises.toArray(), [])
+}

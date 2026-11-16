@@ -1,16 +1,17 @@
 import { STARTING_WEIGHTS_LBS } from './catalog'
-import { PROGRAM_ID } from './program'
 import type { ExerciseState, Profile } from './types'
 
 export function createDefaultProfile(now = new Date().toISOString()): Profile {
   return {
     id: 'me',
-    display_name: 'Lifter',
+    display_name: '',
     unit_system: 'IMPERIAL',
+    equipment_preset: 'GYM',
+    onboarded: false,
     barbell_weight_lbs: 45,
     plates_lbs: [45, 35, 25, 10, 5, 2.5],
     dumbbell_step_lbs: 5,
-    active_program_id: PROGRAM_ID,
+    active_program_id: null,
     current_phase: 1,
     phase_gate_progress: 0,
     next_rotation_index: 0,
