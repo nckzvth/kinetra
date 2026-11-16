@@ -176,6 +176,19 @@ const PPL_PHASES: Record<PhaseNumber, PhaseDef> = {
 
 // ─── Templates ──────────────────────────────────────────────────────────────
 
+const TEMP: ReadinessItem = { id: 'temp', label: 'Raise your temperature', detail: '2–3 min brisk walk, bike or rower', duration_sec: 150 }
+const SHOULDERS: ReadinessItem = { id: 'shoulder', label: 'Shoulders', detail: '12 band dislocates or arm circles, 15 band pull-aparts', duration_sec: 90 }
+const HIPS: ReadinessItem = { id: 'hip', label: 'Hips and ankles', detail: '8 deep squat pries, 8 bodyweight hip hinges', duration_sec: 90 }
+
+/** Warm-up checklist chosen from what a day trains — used for days without a hand-written one. */
+export function readinessForCategories(categories: string[]): ReadinessItem[] {
+  const has = (c: string) => categories.includes(c)
+  const items = [TEMP]
+  if (has('PUSH') || has('PULL')) items.push(SHOULDERS)
+  if (has('LEGS') || has('PULL')) items.push(HIPS)
+  return items
+}
+
 const readiness = (code: string): ReadinessItem[] => {
   const items: ReadinessItem[] = [{ id: 'temp', label: 'Raise your temperature', detail: '2–3 min brisk walk, bike or rower', duration_sec: 150 }]
   if (/PUSH|PULL|UPPER|FULL/.test(code)) items.push({ id: 'shoulder', label: 'Shoulders', detail: '12 band dislocates or arm circles, 15 band pull-aparts', duration_sec: 90 })
@@ -229,7 +242,7 @@ export const FULL_BODY_3: ProgramDef = {
         [FB_B]: [
           ex({ exercise_id: 'barbell_back_squat', name: 'Squat', sets: 3, reps_min: 5, reps_max: 5, rest_sec: 180, warmup_enabled: true }),
           ex({ exercise_id: 'barbell_overhead_press_heavy', name: 'Overhead Press', sets: 3, reps_min: 5, reps_max: 5, rest_sec: 180 }),
-          ex({ exercise_id: 'barbell_deadlift', name: 'Deadlift', sets: 1, reps_min: 5, reps_max: 5, rest_sec: 180 }),
+          ex({ exercise_id: 'barbell_deadlift', name: 'Deadlift', sets: 1, reps_min: 5, reps_max: 5, rest_sec: 180, warmup_enabled: true }),
           ex({ exercise_id: 'lat_pulldown', name: 'Lat Pulldown', sets: 3, reps_min: 8, reps_max: 12, rest_sec: 90 }),
         ],
       },

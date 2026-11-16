@@ -1,5 +1,5 @@
 import { defaultStart, getExercise } from '../domain/catalog'
-import { dayAt, phaseOf } from '../domain/program'
+import { dayAt, phaseOf, readinessForCategories } from '../domain/program'
 import type {
   ExerciseState,
   PhaseNumber,
@@ -93,7 +93,8 @@ export function buildSessionPlan(
     rotation_code: day.id,
     title: day.name,
     subtitle: day.focus,
-    readiness: program.readiness?.[day.id] ?? [],
+    // Templates ship their own checklist; custom days get one based on what they train.
+    readiness: program.readiness?.[day.id] ?? readinessForCategories(exercises.map((e) => getExercise(e.exercise_id).category)),
     exercises,
   }
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createDefaultProfile, createSeedStates } from '../domain/defaults'
 import type { ExerciseState, Profile, SessionLog, SessionPlan } from '../domain/types'
 import { buildSessionPlan as build, feelerSet, prescriptionLabel } from './plan'
-import { FULL_BODY_3, PPL_RAMP, PHASES } from '../domain/program'
+import { FULL_BODY_3, makeCustomProgram, PPL_RAMP, PHASES } from '../domain/program'
 import { evaluateSession as evaluate } from './progression'
 import { calculatePlatesPerSide } from './plates'
 import { projectSchedule, suggestNextDate, toISODate } from './schedule'
@@ -372,5 +372,29 @@ describe('other programs and units', () => {
     expect(out.profile.next_rotation_index).toBe(0)
     expect(out.result.counted_toward_gate).toBe(false)
     expect(out.states.barbell_bench_press_heavy.current_working_weight_lbs).toBe(80)
+  })
+})
+
+describe('warm-ups everywhere', () => {
+  it('full-body B gives the deadlift a full ramp even though squats come first', () => {
+    const w = fresh()
+    w.states.barbell_deadlift.current_working_weight_lbs = 185
+    const plan = build(w.profile, w.states, FULL_BODY_3, { rotation: 'FULL_B' })
+    const dl = plan.exercises.find((e) => e.exercise_id === 'barbell_deadlift')!
+    expect(dl.warmups.map((x) => x.weight_lbs)).toEqual([45, 100, 140, 165])
+  })
+
+  it('custom days get a warm-up checklist based on what they train', () => {
+    const w = fresh()
+    const prog = makeCustomProgram(2)
+    prog.phases[0].workouts.DAY_1 = [
+      { exercise_id: 'barbell_back_squat', name: 'Squat', sets: 3, reps_min: 5, reps_max: 5, amrap_last_set: false, rest_sec: 180, warmup_enabled: true },
+    ]
+    prog.phases[0].workouts.DAY_2 = [
+      { exercise_id: 'barbell_bench_press_heavy', name: 'Bench', sets: 3, reps_min: 5, reps_max: 5, amrap_last_set: false, rest_sec: 180, warmup_enabled: true },
+    ]
+    expect(build(w.profile, w.states, prog, { rotation: 'DAY_1' }).readiness.map((r) => r.id)).toEqual(['temp', 'hip'])
+    expect(build(w.profile, w.states, prog, { rotation: 'DAY_2' }).readiness.map((r) => r.id)).toEqual(['temp', 'shoulder'])
+    expect(build(w.profile, w.states, prog, { rotation: 'DAY_1' }).readiness[0].duration_sec).toBe(150)
   })
 })

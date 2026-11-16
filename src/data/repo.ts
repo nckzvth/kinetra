@@ -230,7 +230,7 @@ export async function addExerciseToActive(exerciseId: string) {
     reps_max: linear ? 5 : 12,
     amrap_last_set: false,
     rest_sec: ex.default_rest_sec,
-    warmup_enabled: false,
+    warmup_enabled: linear && ex.equipment === 'BARBELL',
   }
   await patchActive((a) => {
     const planned = planExercise(p, a.plan.exercises.length, profile, states, false)

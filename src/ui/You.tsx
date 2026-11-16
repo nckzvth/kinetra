@@ -436,7 +436,8 @@ function DayEditor({ profile, states, program, dayId, onDeleted }: { profile: Pr
                 reps_max: linear ? 5 : 12,
                 amrap_last_set: false,
                 rest_sec: ex.default_rest_sec,
-                warmup_enabled: linear && items.length === 0,
+                // Heavy barbell lifts get warm-up sets wherever they sit in the day.
+                warmup_enabled: linear && ex.equipment === 'BARBELL',
               })
             })
           }}
